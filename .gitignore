@@ -1,0 +1,16 @@
+Results
+mlruns
+Results_*
+.ipynb_checkpoints
+
+**/.idea/workspace.xml
+**/.idea/tasks.xml
+
+# Ignore Mac system files
+.DS_Store
+
+nohup.out
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
