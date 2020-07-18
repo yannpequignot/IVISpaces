@@ -23,7 +23,7 @@ def RMSE(y, y_pred, std_y_train, device):
     SE = (y_pred - y) ** 2
     RMSE = torch.mean(SE).sqrt() * std_y_train
     RStdSE = torch.std(SE).sqrt() * std_y_train
-    return (RMSE, RStdSE)
+    return (RMSE.item(), RStdSE.item())
 
 
 def LPP(y_pred, y_test, sigma, device):
@@ -44,8 +44,8 @@ def LPP(y_pred, y_test, sigma, device):
     NLL = NormalLogLikelihood(y_pred, y_test, sigma)
     M = torch.tensor(y_pred.shape[0], device=device).float()
     LPP = NLL.logsumexp(dim=0) - torch.log(M)
-    MLPP = torch.mean(LPP)
-    SLPP = torch.std(LPP)
+    MLPP = torch.mean(LPP).item()
+    SLPP = torch.std(LPP).item()
     return (MLPP, SLPP)
 
 
@@ -75,7 +75,7 @@ def PICP(y_pred, y_test, device):
     y_high = y_pred_s[M_high, :].squeeze().to(device)
 
     inside = (y_test >= y_low).float() * (y_test <= y_high).float()
-    return inside.mean()
+    return inside.mean().item()
 
 
 def MPIW(y_pred, device, scale):
@@ -106,7 +106,36 @@ def MPIW(y_pred, device, scale):
     y_high = y_pred_s[M_high, :].squeeze().to(device)
 
     width = scale * (y_high - y_low)
-    return width.mean()
+    return width.mean().item()
+
+def evaluate_metrics(theta, model, X_test, y_test, sigma_noise, std_y_train, device='cpu', std=True):
+    theta = theta.to(device)
+    X_test=X_test.to(device)
+    y_test=y_test.to(device)
+    std_y_train=std_y_train.to(device)
+    metrics={}
+    
+    y_pred=model(X_test, theta).detach()
+    LPP_test = LPP(y_pred, y_test, sigma_noise, device)
+    
+    y_pred_mean = y_pred.mean(dim=0)
+    RMSE_test = RMSE(y_pred_mean, y_test, std_y_train, device)
+    
+    if std:
+        metrics.update({'RMSE':RMSE_test})
+        metrics.update({'LPP':LPP_test})
+
+    else:
+        metrics.update({'RMSE':RMSE_test[0]})
+        metrics.update({'LPP':LPP_test[0]})        
+            
+    PICP_test=PICP(y_pred, y_test, device)
+    metrics.update({'PICP':PICP_test})
+
+    MPIW_test= MPIW(y_pred, device, std_y_train)
+    metrics.update({'MPIW':MPIW_test})
+
+    return metrics
 
 
 def KL(theta0, theta1, k=1, device='cpu', p=2):
