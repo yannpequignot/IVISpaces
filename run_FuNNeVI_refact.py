@@ -3,6 +3,8 @@ import math
 import torch
 from torch import nn
 
+import argparse
+
 import scipy.stats as stats
 import matplotlib
 import matplotlib.pyplot as plt
@@ -46,10 +48,11 @@ lat_dim=5
 learning_rate=0.005
 
 #scheduler
-patience=6
+patience=20
 lr_decay=.5#.7
 min_lr= 0.0001
-n_epochs=500
+n_epochs=600
+
 
 
 #loss hyperparameters
@@ -162,17 +165,25 @@ def run(dataset):
     def prior(n):
         return sigma_prior*torch.randn(size=(n,param_count), device=device)
 
+    if method == 'FuNNeVI':
+        def kl(GeN):
 
-    def kl(GeN):
+            theta=GeN(n_samples_KL) #variationnel
+            theta_prior=prior(n_samples_KL) #prior
 
-        theta=GeN(n_samples_KL) #variationnel
-        theta_prior=prior(n_samples_KL) #prior
+            theta_proj, theta_prior_proj = projection(theta, theta_prior)
 
-        theta_proj, theta_prior_proj = projection(theta, theta_prior)
+            K=KL(theta_proj, theta_prior_proj,k=kNNE,device=device)
+            return K
+    else:
+        def kl(GeN):
 
-        K=KL(theta_proj, theta_prior_proj,k=kNNE,device=device)
-        return K
+            theta=GeN(n_samples_KL) #variationnel
+            theta_prior=prior(n_samples_KL) #prior
 
+            K=KL(theta, theta_prior,k=kNNE,device=device)
+            return K
+        
     #ELBO
     def ELBO(x_data, y_data, GeN):
         Average_LogLikelihood=loss(x_data, y_data, GeN)
@@ -180,12 +191,11 @@ def run(dataset):
         the_ELBO= - Average_LogLikelihood+ (len(x_data)/size_data)*the_KL
         return the_ELBO, the_KL, Average_LogLikelihood 
 
+   
     #generative model
     GeN = BigGenerator(lat_dim,param_count,device).to(device)
 
-
     #optimizer 
-
     optimizer = torch.optim.Adam(GeN.parameters(), lr=learning_rate)
 
     FuN=IVI(train_loader, ELBO, optimizer)
@@ -229,13 +239,21 @@ def run(dataset):
     for m, r in metrics.items():
         print(m+': '+str(r))
     
-    
+parser = argparse.ArgumentParser()
+parser.add_argument("--method", type=int, default=0,
+                    help="0 for GeNNeVI, 1 for FuNNeVI")    
 if __name__ == "__main__":
 
     FuNmodels={}
     results={}
+    args = parser.parse_args()
     
-    xpname = 'FuNNeVI'
+    if args.method == 1:
+        method='FuNNeVI'
+    else:
+        method='GeNNeVI'
+    
+    xpname = method
     mlflow.set_experiment(xpname)
     
     

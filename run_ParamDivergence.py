@@ -59,7 +59,7 @@ def run(dataset, method, metrics, device):
     
     metrics[(method,metric)].update({dataset:(np.mean(KLs).round(decimals=3), np.std(KLs).round(decimals=3))})
     
-    metric='SW(-,G)'
+    metric='SW(-,HMC)'
     print(dataset+': '+metric)
 
     KLs=[]
@@ -74,7 +74,7 @@ def run(dataset, method, metrics, device):
     metrics[(method,metric)].update({dataset:(np.mean(KLs).round(decimals=3), np.std(KLs).round(decimals=3))})
     
     models_pairs=list(itertools.combinations(models[dataset].items(),2))
-    
+    '''    
     metric='KL(-,-)'
     print(dataset+': '+metric)
 
@@ -106,7 +106,7 @@ def run(dataset, method, metrics, device):
         KLs.append(SW.item())
     
     metrics[(method,metric)].update({dataset:(np.mean(KLs).round(decimals=3), np.std(KLs).round(decimals=3))})
-
+    '''
     return metrics
 
 # compute KL and SW in parameter space 
@@ -116,23 +116,28 @@ def run(dataset, method, metrics, device):
 
 if __name__ == "__main__":
     
-    models_HMC = torch.load('Results/HMC_models.pt')
-    models = torch.load('mlruns/2/c40e5719924a44a2a88260bb8eb63c6f/artifacts/FuNmodels.pt')
-    method = 'FuNNeVI'
-    
+    device ='cpu'# torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
+    models_HMC = torch.load('Results/HMC_models.pt',map_location='cpu')
+    models = torch.load('mlruns/1/99510b7842e74c5b97e65d6999c7815b/artifacts/GeNmodels.pt',map_location='cpu')
+    method = 'GeNNeVI'
+#    for d,m in models.items():
+#        models[d]={'0':m}
     
     datasets = [d for d, m in models_HMC.items()]
 
-    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-
     
-    metrics=['KL(-,HMC)', 'KL(HMC,-)', 'SW(-,G)', 'KL(-,-)', 'SW(-,-)']
+    
+    metrics=['KL(-,HMC)', 'KL(HMC,-)', 'SW(-,HMC)']#, 'KL(-,-)', 'SW(-,-)']
 
     metrics = {(method,metric):{} for metric in metrics}
 
-    
-    for d in datasets:
-        metrics=run(d, method, metrics, device) 
-        print(d+': done :-)')
+    with mlflow.start_run(run_id='99510b7842e74c5b97e65d6999c7815b'):
+        for d in datasets:
+            metrics=run(d, method, metrics, device) 
+            print(d+': done :-)')
 
         torch.save(metrics, 'Results/ParamDivergence'+method+'.pt')
+    
+        mlflow.log_artifact('Results/ParamDivergence'+method+'.pt') 
+    

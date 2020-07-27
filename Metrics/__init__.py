@@ -26,7 +26,7 @@ def RMSE(y, y_pred, std_y_train, device):
     return (RMSE.item(), RStdSE.item())
 
 
-def LPP(y_pred, y_test, sigma, device):
+def LPP(y_pred_, y_test_, sigma, device):
     r"""
     NLPD from Quinonero-Candela and al.
     NLL or LL from others
@@ -41,8 +41,10 @@ def LPP(y_pred, y_test, sigma, device):
     Returns:
         (Mean, Std) for Log Posterior Predictive of ensemble Theta on data (X,y)
     """
+    y_pred=y_pred_.double()
+    y_test=y_test_.double()
     NLL = NormalLogLikelihood(y_pred, y_test, sigma)
-    M = torch.tensor(y_pred.shape[0], device=device).float()
+    M = torch.tensor(y_pred.shape[0], device=device).double()
     LPP = NLL.logsumexp(dim=0) - torch.log(M)
     MLPP = torch.mean(LPP).item()
     SLPP = torch.std(LPP).item()

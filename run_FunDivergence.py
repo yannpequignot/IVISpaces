@@ -62,7 +62,7 @@ def run(dataset, method, metrics, ratio_ood, device):
     
     metrics[(method,metric)].update({dataset:(np.mean(KLs).round(decimals=3), np.std(KLs).round(decimals=3))})
     
-    metric='SW(-,G)'
+    metric='SW(-,HMC)'
     print(dataset+': '+metric)
 
     KLs=[]
@@ -78,6 +78,7 @@ def run(dataset, method, metrics, ratio_ood, device):
     
     models_pairs=list(itertools.combinations(models[dataset].items(),2))
     
+    """
     metric='KL(-,-)'
     print(dataset+': '+metric)
 
@@ -109,7 +110,7 @@ def run(dataset, method, metrics, ratio_ood, device):
         KLs.append(SW.item())
     
     metrics[(method,metric)].update({dataset:(np.mean(KLs).round(decimals=3), np.std(KLs).round(decimals=3))})
-
+    """
     return metrics
 
 parser = argparse.ArgumentParser()
@@ -127,25 +128,31 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     print(args)
+    device = 'cpu'#torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
-    models_HMC = torch.load('Results/HMC_models.pt')
-    models = torch.load('mlruns/2/c40e5719924a44a2a88260bb8eb63c6f/artifacts/FuNmodels.pt')
-    method = 'FuNNeVI'
-    
+    models_HMC = torch.load('Results/HMC_models.pt', map_location='cpu')
+    models = torch.load('mlruns/1/c36db0f0e2974d6db1d93c7beb971c78/artifacts/FuNrefact_2020-07-27-01:10.pt',map_location='cpu')
+    for d,m in models.items():
+        models[d]={'0':m}
+    method = 'GeNNeVI'
+     
     datasets = [d for d, m in models_HMC.items()]
 
     ratio_ood = args.ratio_ood
 
-    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
     
-    metrics=['KL(-,HMC)', 'KL(HMC,-)', 'SW(-,G)', 'KL(-,-)', 'SW(-,-)']
+    metrics=['KL(-,HMC)', 'KL(HMC,-)', 'SW(-,HMC)']#, 'KL(-,-)', 'SW(-,-)']
 
     metrics ={(method,metric):{} for metric in metrics}
 
-    
-    for d in datasets:
-        metrics=run(d, method, metrics, ratio_ood, device) 
-        print(d+': done :-)')
+    with mlflow.start_run(run_id='c36db0f0e2974d6db1d93c7beb971c78'):
+        for d in datasets:
+            metrics=run(d, method, metrics, ratio_ood, device) 
+            print(d+': done :-)')
 
-        torch.save(metrics, 'Results/Divergence'+method+'.pt')
+            torch.save(metrics, 'Results/PredictorDivergence'+method+'PatByEpoch.pt')
+    
+        mlflow.log_artifact('Results/PredictorDivergence'+method+'PatByEpoch.pt') 
+
+
