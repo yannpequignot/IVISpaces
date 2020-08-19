@@ -15,6 +15,7 @@ test_ratio=0.1
 
 def switch_setup(setup):
     return {
+        'foong2d':  importlib.util.spec_from_file_location("foong", "Experiments/foong2D/__init__.py") ,
         'foong':  importlib.util.spec_from_file_location("foong", "Experiments/foong/__init__.py") ,
         'foong_sparse':  importlib.util.spec_from_file_location("foong_sparse", "Experiments/foong_sparse/__init__.py") ,
         'foong_mixed':  importlib.util.spec_from_file_location("foong_mixed", "Experiments/foong_mixed/__init__.py") ,
@@ -25,7 +26,10 @@ def switch_setup(setup):
         'wine': importlib.util.spec_from_file_location("wine", "Experiments/winequality/__init__.py"),
         'kin8nm': importlib.util.spec_from_file_location("kin8nm", "Experiments/kin8nm/__init__.py"),
         'powerplant': importlib.util.spec_from_file_location("powerplant", "Experiments/ccpowerplant/__init__.py"),
-        'yacht': importlib.util.spec_from_file_location("yacht", "Experiments/yacht/__init__.py")
+        'yacht': importlib.util.spec_from_file_location("yacht", "Experiments/yacht/__init__.py"),
+        'navalC': importlib.util.spec_from_file_location("navalC", "Experiments/naval/__init__.py"),
+        'protein': importlib.util.spec_from_file_location("protein", "Experiments/naval/__init__.py")
+
     }[setup]
 
 def get_setup(setup):
