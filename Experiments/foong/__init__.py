@@ -74,7 +74,7 @@ class Setup(AbstractRegressionSetup):
         plt.scatter(self._X_train.cpu(), self._y_train.cpu(), marker='.',color='black',zorder=4)
         return fig
 
-    def makePlotCI(self, theta, device):
+    def makePlotCI(self, theta, device,sigma_noise=0.):
         N=theta.shape[0]
         m_3=int(0.001*N)
         M_3=N-m_3
@@ -84,7 +84,8 @@ class Setup(AbstractRegressionSetup):
         M_1=N-m_1
         X=torch.arange(-2,2,0.02).to(device)
 
-        pred, _=self._model(X,theta).detach().sort(dim=0)
+        pred_, _=self._model(X,theta).detach().sort(dim=0)
+        pred=pred_+sigma_noise*torch.randn_like(pred_)
         y_mean=pred.mean(dim=0).squeeze().cpu()
         y_3=pred[m_3,:].squeeze().cpu()
         Y_3=pred[M_3,:].squeeze().cpu()

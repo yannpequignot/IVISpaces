@@ -28,7 +28,7 @@ def switch_setup(setup):
         'powerplant': importlib.util.spec_from_file_location("powerplant", "Experiments/ccpowerplant/__init__.py"),
         'yacht': importlib.util.spec_from_file_location("yacht", "Experiments/yacht/__init__.py"),
         'navalC': importlib.util.spec_from_file_location("navalC", "Experiments/naval/__init__.py"),
-        'protein': importlib.util.spec_from_file_location("protein", "Experiments/naval/__init__.py")
+        'protein': importlib.util.spec_from_file_location("protein", "Experiments/protein/__init__.py")
 
     }[setup]
 
