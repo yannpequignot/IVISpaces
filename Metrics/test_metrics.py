@@ -46,6 +46,13 @@ def LPP(y_pred_, y_test_, sigma, device):
     SLPP = torch.std(LPP).item()
     return (MLPP, SLPP)
 
+def WAIC(y_pred, sigma_noise, y_test,  device):
+    log_proba = log_norm( y_test.unsqueeze(1), y_pred, sigma_noise).view(y_pred.shape[0],y_pred.shape[1])    
+    M = torch.tensor(y_pred.shape[0], device=log_proba.device).float()
+    LPP = log_proba.logsumexp(dim=0) - torch.log(M)    
+    LPP_s = LPP.mean().item()
+    pWAIC = log_proba.var(dim=0).mean().item()
+    return LPP_s-pWAIC
 
 def PICP(y_pred, sigma_noise, y_test, device):
     r"""
@@ -66,8 +73,6 @@ def PICP(y_pred, sigma_noise, y_test, device):
 
     """
     #add noise
-
-    y_pred=y_pred+(sigma_noise*torch.randn_like(y_pred))
     M = y_pred.shape[0]
     M_low = int(0.025 * M)
     M_high = int(0.975 * M)
@@ -98,9 +103,7 @@ def MPIW(y_pred, device, scale):
         \frac{1}{N} \sum_{n<N}\hat{y}^\text{high}_n - \hat{y}^\text{low}_n} 
         $$
         where $\hat{y}^\text{low}_n$ and $\hat{y}^\text{high}_n$ are respectively the $2,5 \%$ and $97,5 \%$ percentiles of the $\hat{y}_n=y_pred[:,n]$.
-
     """
-
     M = y_pred.shape[0]
     M_low = int(0.025 * M)
     M_high = int(0.975 * M)
@@ -145,7 +148,11 @@ def evaluate_metrics(y_pred,sigma_noise, y_test, std_y_train, device='cpu', std=
     else:
         metrics.update({'RMSE':RMSE_test[0]})
         metrics.update({'LPP':LPP_test[0]})        
-            
+    
+    WAIC_test=WAIC(y_pred, sigma_noise, y_test,  device)
+    metrics.update({'WAIC':WAIC_test})
+    
+    y_pred=y_pred+(sigma_noise*torch.randn_like(y_pred))
     PICP_test=PICP(y_pred, sigma_noise, y_test, device)
     metrics.update({'PICP':PICP_test})
 

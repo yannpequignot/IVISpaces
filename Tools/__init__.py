@@ -7,22 +7,26 @@ def log_norm(x, mu, std):
     Evaluation of 1D normal distribution on tensors
 
     Parameters:
-        x (Tensor): Data tensor of size B X S X 1
-        mu (Tensor): Mean tensor of size S X 1
-        std (Float): Positive scalar (standard deviation)
+        x (Tensor): Data tensor of size S x N x 1 
+        mu (Tensor): Mean tensor of size B x S x 1
+        std (Float): Tensor of size B x S x 1(standard deviation)
 
     Returns:
-        logproba (Tensor): size B X S X 1 with logproba(b,i)=[log p(x(b,i),mu(i),std)]
+        logproba (Tensor): size B x S x N x 1 with logproba[b,s,n]=[log p(x(s,n)|mu(b,s),std[b])]
     """
-    assert x.shape[1] == mu.shape[0]
-    assert x.shape[2] == mu.shape[1]
-    assert mu.shape[1] == 1
-    B = x.shape[0]
-    S = x.shape[1]
-    var = torch.as_tensor(std**2).type_as(x)
-    d = (x.view(B, S, 1)-mu.view(1, S, 1))**2
-    c = 2*math.pi*var
-    return -0.5 * (1/(var))*d - 0.5 * c.log()
+    
+    assert x.shape[0] == mu.shape[1]
+    assert x.shape[-1] == mu.shape[-1]
+    
+#    assert mu.shape[1] == 1
+    B = mu.shape[0]
+    S = mu.shape[1]  
+    
+    var = std.pow(2).unsqueeze(2)
+    d = (x-mu.unsqueeze(2))**2 # B x S x N x 1
+    c = (2*math.pi*var)
+    return -0.5 * var.pow(-1)*d - 0.5 * c.log()
+
 
 def NormalLogLikelihood(y_pred, y_data, sigma_noise):
     """
@@ -40,8 +44,9 @@ def NormalLogLikelihood(y_pred, y_data, sigma_noise):
 #    assert y_pred.shape[1] == y_data.shape[0]
 #    assert y_pred.shape[2] == y_data.shape[1]
 #    assert y_data.shape[1] == 1
-    log_proba = log_norm(y_pred, y_data, sigma_noise)
-    return log_proba.squeeze(-1)
+    std=sigma_noise*torch.ones_like(y_pred)
+    log_proba = log_norm( y_data.unsqueeze(1), y_pred, std)
+    return log_proba.view(y_pred.shape[0],y_pred.shape[1])
 
 def logmvn01pdf(theta, device,v=1.):
     """
