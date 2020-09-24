@@ -1,5 +1,7 @@
 import torch
 from scipy import stats as st
+import torch.nn.functional as F
+
 
 def sphere(L, dim):
     """

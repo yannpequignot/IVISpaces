@@ -1,5 +1,5 @@
 import torch
-
+import math
 
 def KL(theta0, theta1, k=1, device='cpu', p=2, beta=1.):
     """
@@ -101,6 +101,7 @@ def SFunKL(t, s, projection, device, k=1, n=100, m=50):
     return K
 
 
+
 def Entropy(theta,k=1,k_MC=1,device='cpu'):
     """
     Parameters:
@@ -113,12 +114,12 @@ def Entropy(theta,k=1,k_MC=1,device='cpu'):
     """
     nb_samples=theta.shape[0]
     dim=theta.shape[1]
+    kMC=torch.tensor(float(k_MC))
     D=torch.cdist(theta,theta)
     a = torch.topk(D, k=k+1, dim=0, largest=False, sorted=True)[0][k].clamp(torch.finfo().eps,float('inf')).to(device)
     d=torch.as_tensor(float(dim), device=device)
     K=torch.as_tensor(float(k), device=device)
-    K_MC=torch.as_tensor(float(k_MC), device=device)
     N=torch.as_tensor(float(nb_samples), device=device)
     pi=torch.as_tensor(math.pi, device=device)
-    lcd = d/2.*pi.log() - torch.lgamma(1. + d/2.0)-d/2*K_MC.log()
-    return torch.log(N) - torch.digamma(K) + lcd + d/nb_samples*torch.sum(torch.log(a))
+    lcd = d/2.*pi.log() - torch.lgamma(1. + d/2.0)#-d/2*K_MC.log()
+    return torch.log(N) - torch.digamma(K) + lcd + d/nb_samples*a.div(torch.sqrt(kMC)).log().sum(-1)
