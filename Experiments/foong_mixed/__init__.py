@@ -119,7 +119,7 @@ class Setup(AbstractRegressionSetup):
     def logprior(self, theta):
         return  self._logprior(theta)
    
-     def projection(self,theta0,theta1, n_samples,ratio_ood):
+    def projection(self,theta0,theta1, n_samples,ratio_ood):
         #compute size of both samples
         #n_samples=self.n_train_samples
         n_ood=int(ratio_ood*n_samples)
