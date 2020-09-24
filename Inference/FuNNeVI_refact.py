@@ -2,8 +2,12 @@ import torch
 from torch import nn
 import math
 
+from tqdm import trange
 
-class IVI():
+from Metrics import KL, batchKL
+
+
+class FuNNeVI():
     def __init__(self, train_loader, ELBO,
                  optimizer):
         
@@ -14,7 +18,7 @@ class IVI():
 
 
 
-    def run(self, GeN):
+    def run(self, GeN, show_fn=None):
 
         self.scores={'ELBO':0. ,
                      'KL':0.,
@@ -27,7 +31,6 @@ class IVI():
             for (x,y) in self.train_loader:
 
                 self.optimizer.zero_grad()
-                
                 
                 L, K, LL=self.ELBO(x,y,GeN)
                 L.backward()

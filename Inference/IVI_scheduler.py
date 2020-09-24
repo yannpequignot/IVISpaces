@@ -5,16 +5,16 @@ import math
 
 class IVI():
     def __init__(self, train_loader, ELBO,
-                 optimizer):
+                 optimizer, scheduler):
         
         self.train_loader=train_loader
         self.ELBO=ELBO
         
         self.optimizer=optimizer
 
+        self.scheduler=scheduler
 
-
-    def run(self, GeN):
+    def run(self, GeN, show_fn=None):
 
         self.scores={'ELBO':0. ,
                      'KL':0.,
@@ -28,7 +28,6 @@ class IVI():
 
                 self.optimizer.zero_grad()
                 
-                
                 L, K, LL=self.ELBO(x,y,GeN)
                 L.backward()
 
@@ -36,6 +35,7 @@ class IVI():
 
                 self.optimizer.step()
 
+                self.scheduler.step(L.item())
                 self.scores['ELBO']+= L.item()*len(x)
                 self.scores['KL']+= K.item()*len(x)
                 self.scores['LL']+=LL.item()*len(x)

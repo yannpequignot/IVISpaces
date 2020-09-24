@@ -1,6 +1,6 @@
 import torch
 import math
-
+import matplotlib.pyplot as plt
 
 def log_norm(x, mu, std):
     """
@@ -69,5 +69,37 @@ def logmvn01pdf(theta, device,v=1.):
     return -0.5*(H*d).sum(2).squeeze()-const
 
 
+def PlotCI(x_pred, y_pred, x, y, device):
+    N=y_pred.shape[0]-1
+    print(N)
+    m_3=int(0.001*N)
+    M_3=N-m_3
+    m_2=int(0.021*N)
+    M_2=N-m_2
+    m_1=int(0.136*N)
+    M_1=N-m_1
+
+    x_pred=x_pred.squeeze()
+
+    pred,_=y_pred.sort(dim=0)
+    y_mean=y_pred.mean(dim=0).squeeze().cpu()
+    y_3=pred[m_3,:].squeeze().cpu()
+    Y_3=pred[M_3,:].squeeze().cpu()
+    y_2=pred[m_2,:].squeeze().cpu()
+    Y_2=pred[M_2,:].squeeze().cpu()    
+    y_1=pred[m_1,:].squeeze().cpu()
+    Y_1=pred[M_1,:].squeeze().cpu()
+
+    fig, ax=plt.subplots(figsize=(20,20))
+    ax.fill_between(x_pred.cpu(), y_3, Y_3, facecolor='springgreen', alpha=0.1)
+    ax.fill_between(x_pred.cpu(), y_2, Y_2, facecolor='springgreen', alpha=0.1)
+    ax.fill_between(x_pred.cpu(), y_1, Y_1, facecolor='springgreen', alpha=0.1)
+    plt.plot(x_pred.cpu(),y_mean, color='springgreen')
+
+    plt.grid(True, which='major', linewidth=0.5)
+
+    plt.ylim(-5, 5)
+    plt.scatter(x.cpu(), y.cpu() , marker='+',color='black',zorder=4)
+    return fig
 
 

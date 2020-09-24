@@ -14,11 +14,11 @@ class IVI():
 
 
 
-    def run(self, GeN):
+    def run(self, GeN, C):
 
         self.scores={'ELBO':0. ,
                      'KL':0.,
-                     'LL':0.
+                     'LOSS':0.
         }
         example_count=0.
         
@@ -29,7 +29,7 @@ class IVI():
                 self.optimizer.zero_grad()
                 
                 
-                L, K, LL=self.ELBO(x,y,GeN)
+                L, K, LL=self.ELBO(x,y,GeN, C)
                 L.backward()
 
                 lr = self.optimizer.param_groups[0]['lr']
@@ -38,12 +38,12 @@ class IVI():
 
                 self.scores['ELBO']+= L.item()*len(x)
                 self.scores['KL']+= K.item()*len(x)
-                self.scores['LL']+=LL.item()*len(x)
+                self.scores['LOSS']+=LL.item()*len(x)
                 example_count+=len(x)
     
         mean_scores={'ELBO': self.scores['ELBO']/example_count ,
              'KL':self.scores['KL']/example_count,
-             'LL':self.scores['LL']/example_count,
+             'LOSS':self.scores['LOSS']/example_count,
              'lr':lr
             }
         return mean_scores
