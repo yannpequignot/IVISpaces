@@ -48,7 +48,28 @@ def NormalLogLikelihood(y_pred, y_data, sigma_noise):
     log_proba = log_norm( y_data.unsqueeze(1), y_pred, std)
     return log_proba.view(y_pred.shape[0],y_pred.shape[1])
 
-def logmvn01pdf(theta, device,v=1.):
+
+def AverageNormalLogLikelihood(y_pred, y_data, sigma_noise):
+    """
+    Evaluation of a Normal distribution
+    
+    Parameters:
+    y_pred (Tensor): tensor of size M X N X 1
+    y_data (Tensor): tensor of size N X 1
+    sigma_noise (Scalar): std for point likelihood: p(y_data | y_pred, sigma_noise) Gaussian N(y_pred,sigma_noise)
+
+    Returns:
+    logproba (Tensor):  (raw) size M X N , with logproba[m,n]= p(y_data[n] | y_pred[m,n], sigma_noise)                        (non raw) size M , logproba[m]=sum_n logproba[m,n]
+    """
+# assert taken care of by log_norm
+#    assert y_pred.shape[1] == y_data.shape[0]
+#    assert y_pred.shape[2] == y_data.shape[1]
+#    assert y_data.shape[1] == 1
+    std=sigma_noise*torch.ones_like(y_pred)
+    log_proba = log_norm( y_data.unsqueeze(1), y_pred, std).view(y_pred.shape[0],y_pred.shape[1])
+    return log_proba.sum(dim=1).mean()
+
+def logmvn01pdf(theta, std=1.):
     """
     Evaluation of log proba with density N(0,v*I_n)
 
@@ -59,14 +80,14 @@ def logmvn01pdf(theta, device,v=1.):
     logproba (Tensor): size N, vector of log probabilities
     """
     dim = theta.shape[1]
-    S = v*torch.ones(dim).type_as(theta).to(device)
-    mu = torch.zeros(dim).type_as(theta).to(device)
+    S = std*torch.ones(dim).to(theta.device)
+    mu = torch.zeros(dim).to(theta.device)
     n_x = theta.shape[0]
 
-    H = S.view(dim, 1, 1).inverse().view(1, 1, dim)
+    V_inv = S.view(1, 1, dim).pow(-2)
     d = ((theta-mu.view(1, dim))**2).view(n_x, dim)
     const = 0.5*S.log().sum()+0.5*dim*torch.tensor(2*math.pi).log()
-    return -0.5*(H*d).sum(2).squeeze()-const
+    return -0.5*(V_inv*d).sum(2).squeeze()-const
 
 
 def PlotCI(x_pred, y_pred, x, y, device):
@@ -98,7 +119,7 @@ def PlotCI(x_pred, y_pred, x, y, device):
 
     plt.grid(True, which='major', linewidth=0.5)
 
-    plt.ylim(-5, 5)
+    plt.ylim(-4, 4)
     plt.scatter(x.cpu(), y.cpu() , marker='+',color='black',zorder=4)
     return fig
 

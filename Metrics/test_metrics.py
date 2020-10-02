@@ -21,6 +21,13 @@ def RMSE(y, y_pred, std_y_train, device):
     RStdSE = torch.std(SE).sqrt() * std_y_train
     return (RMSE.item(), RStdSE.item())
 
+def LPP_Gaussian(y_pred_, y_test_, sigma_noise):
+    y_sigma=torch.sqrt(y_pred_.var(0)+sigma_noise**2)
+    y_mean=y_pred_.mean(0)
+    LPP = log_norm( y_test_.unsqueeze(1), y_mean.unsqueeze(0), y_sigma.unsqueeze(0)).mean()
+    MLPP = torch.mean(LPP).item()
+    SLPP = torch.std(LPP).item()
+    return (MLPP, SLPP)
 
 def LPP(y_pred_, y_test_, sigma, device):
     r"""
@@ -138,16 +145,22 @@ def evaluate_metrics(y_pred,sigma_noise, y_test, std_y_train, device='cpu', std=
     
     LPP_test = LPP(y_pred, y_test, sigma_noise, device)
     
+    gLPP_test=LPP_Gaussian(y_pred, y_test, sigma_noise)
+    
     y_pred_mean = y_pred.mean(dim=0)
     RMSE_test = RMSE(y_pred_mean, y_test, std_y_train, device)
     
     if std:
         metrics.update({'RMSE':RMSE_test})
         metrics.update({'LPP':LPP_test})
+        metrics.update({'gLPP':gLPP_test})
+
 
     else:
         metrics.update({'RMSE':RMSE_test[0]})
-        metrics.update({'LPP':LPP_test[0]})        
+        metrics.update({'LPP':LPP_test[0]}) 
+        metrics.update({'gLPP':gLPP_test[0]})
+
     
     WAIC_test=WAIC(y_pred, sigma_noise, y_test,  device)
     metrics.update({'WAIC':WAIC_test})
