@@ -22,9 +22,9 @@ def log_norm(x, mu, std):
     B = mu.shape[0]
     S = mu.shape[1]  
     
-    var = std.pow(2).unsqueeze(2)
+    var = std.pow(2).unsqueeze(2) # B x S x 1
     d = (x-mu.unsqueeze(2))**2 # B x S x N x 1
-    c = (2*math.pi*var)
+    c = (2*math.pi*var) # B x S x 1
     return -0.5 * var.pow(-1)*d - 0.5 * c.log()
 
 

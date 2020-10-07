@@ -21,15 +21,17 @@ def RMSE(y, y_pred, std_y_train, device):
     RStdSE = torch.std(SE).sqrt() * std_y_train
     return (RMSE.item(), RStdSE.item())
 
-def LPP_Gaussian(y_pred_, y_test_, sigma_noise):
+def LPP_Gaussian(y_pred_, y_test_, sigma_noise, y_scale):
     y_sigma=torch.sqrt(y_pred_.var(0)+sigma_noise**2)
     y_mean=y_pred_.mean(0)
-    LPP = log_norm( y_test_.unsqueeze(1), y_mean.unsqueeze(0), y_sigma.unsqueeze(0)).mean()
+    LPP = log_norm(y_test_.unsqueeze(1), y_mean.unsqueeze(0), y_sigma.unsqueeze(0)).mean()
+    #account for data scaling
+    LPP-=y_scale.log() 
     MLPP = torch.mean(LPP).item()
     SLPP = torch.std(LPP).item()
     return (MLPP, SLPP)
 
-def LPP(y_pred_, y_test_, sigma, device):
+def LPP(y_pred_, y_test_, sigma, device, y_scale):
     r"""
     NLPD from Quinonero-Candela and al.
     NLL or LL from others
@@ -46,22 +48,26 @@ def LPP(y_pred_, y_test_, sigma, device):
     """
     y_pred=y_pred_
     y_test=y_test_
-    log_proba = log_norm( y_test.unsqueeze(1), y_pred, sigma).view(y_pred.shape[0],y_pred.shape[1])    
+    log_proba = log_norm( y_test.unsqueeze(1), y_pred, sigma).view(y_pred.shape[0],y_pred.shape[1])
+    #account for data scaling
+    log_proba-=y_scale.log()   
     M = torch.tensor(y_pred.shape[0], device=log_proba.device).float()
     LPP = log_proba.logsumexp(dim=0) - torch.log(M)    
     MLPP = torch.mean(LPP).item()
     SLPP = torch.std(LPP).item()
     return (MLPP, SLPP)
 
-def WAIC(y_pred, sigma_noise, y_test,  device):
-    log_proba = log_norm( y_test.unsqueeze(1), y_pred, sigma_noise).view(y_pred.shape[0],y_pred.shape[1])    
+def WAIC(y_pred, sigma_noise, y_test,  device, y_scale):
+    log_proba = log_norm( y_test.unsqueeze(1), y_pred, sigma_noise).view(y_pred.shape[0],y_pred.shape[1])
+    #account for data scaling
+    log_proba-=y_scale.log() 
     M = torch.tensor(y_pred.shape[0], device=log_proba.device).float()
     LPP = log_proba.logsumexp(dim=0) - torch.log(M)    
     LPP_s = LPP.mean().item()
     pWAIC = log_proba.var(dim=0).mean().item()
     return LPP_s-pWAIC
 
-def PICP(y_pred, sigma_noise, y_test, device):
+def PICP(y_pred, y_test, device):
     r"""
 
     Args:
@@ -143,9 +149,9 @@ def evaluate_metrics(y_pred,sigma_noise, y_test, std_y_train, device='cpu', std=
     std_y_train=std_y_train.to(device)
     metrics={}
     
-    LPP_test = LPP(y_pred, y_test, sigma_noise, device)
+    LPP_test = LPP(y_pred, y_test, sigma_noise, device, std_y_train)
     
-    gLPP_test=LPP_Gaussian(y_pred, y_test, sigma_noise)
+    gLPP_test=LPP_Gaussian(y_pred, y_test, sigma_noise, std_y_train)
     
     y_pred_mean = y_pred.mean(dim=0)
     RMSE_test = RMSE(y_pred_mean, y_test, std_y_train, device)
@@ -162,11 +168,11 @@ def evaluate_metrics(y_pred,sigma_noise, y_test, std_y_train, device='cpu', std=
         metrics.update({'gLPP':gLPP_test[0]})
 
     
-    WAIC_test=WAIC(y_pred, sigma_noise, y_test,  device)
+    WAIC_test=WAIC(y_pred, sigma_noise, y_test,  device, std_y_train)
     metrics.update({'WAIC':WAIC_test})
     
     y_pred=y_pred+(sigma_noise*torch.randn_like(y_pred))
-    PICP_test=PICP(y_pred, sigma_noise, y_test, device)
+    PICP_test=PICP(y_pred, y_test, device)
     metrics.update({'PICP':PICP_test})
 
     MPIW_test= MPIW(y_pred, device, std_y_train)
