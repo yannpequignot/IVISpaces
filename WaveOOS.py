@@ -27,13 +27,63 @@ def makedirs(filename):
         os.makedirs(os.path.dirname(filename))
 
 
+# def PlotFoong(y_pred, x_pred=x_pred,  x=x_train, y=y_train, device=device):
+    
+#     parameters = {'xtick.labelsize':8,
+#                   'ytick.labelsize':8}
+#     plt.rcParams.update(parameters)
+    
+#     N=y_pred.shape[0]-1
+#     print(N)
+#     m_3=int(0.001*N)
+#     M_3=N-m_3
+#     m_2=int(0.021*N)
+#     M_2=N-m_2
+#     m_1=int(0.136*N)
+#     M_1=N-m_1
 
+#     x_pred=x_pred.squeeze()
+
+#     pred,_=y_pred.sort(dim=0)
+#     y_mean=y_pred.mean(dim=0).squeeze().cpu()
+#     y_3=pred[m_3,:].squeeze().cpu()
+#     Y_3=pred[M_3,:].squeeze().cpu()
+#     y_2=pred[m_2,:].squeeze().cpu()
+#     Y_2=pred[M_2,:].squeeze().cpu()    
+#     y_1=pred[m_1,:].squeeze().cpu()
+#     Y_1=pred[M_1,:].squeeze().cpu()
+
+    
+
+#     fig, ax=plt.subplots(figsize=(5,3))
+#     plt.plot(x_pred.cpu(), y_mean, color='springgreen')
+#     plt.plot(x_pred.cpu(), torch.cos(4.0*(x_pred+0.2)).cpu(),'--',color='green')
+
+#     ax.fill_between(x_pred.cpu(), y_3, Y_3, facecolor='springgreen', alpha=0.1)
+#     ax.fill_between(x_pred.cpu(), y_2, Y_2, facecolor='springgreen', alpha=0.1)
+#     ax.fill_between(x_pred.cpu(), y_1, Y_1, facecolor='springgreen', alpha=0.1)
+
+#     ax.set_yticks([-3,0,3])
+#     ax.set_xticks([-1,0,1])
+#     plt.grid(True, which='major', linewidth=0.5)
+#     plt.ylim(-4, 4)
+#     plt.xlim(-2.,2.)
+#     plt.scatter(x.cpu(), y.cpu() , marker='.',color='black',zorder=4)
+#     return fig
+
+def OOD_sampler(n_ood=50):
+    M = -4.
+    m = 2.
+    X = torch.rand(n_ood,1).to(device) * (M-m) + m                           
+    return X
+        
+        
 ## Hyperparameters ##
 
 #predictive model
 layerwidth=50
 nblayers=1
-activation=nn.ReLU()
+activation=nn.Tanh()#ReLU()
 
 #generative model
 lat_dim=5
@@ -61,12 +111,11 @@ sigma_prior=.5# TO DO check with other experiments setup.sigma_prior
 input_sampling='uniform' #'uniform', 'uniform+data'
 
 
-def ensemble_bootstrap(dataset,device,seed):
+def ensemble_bootstrap(dataset,device):
     setup_ = get_setup(dataset)
-    setup=setup_.Setup(device, seed=seed) 
+    setup=setup_.Setup(device) 
 
     x_train, y_train=setup.train_data()
-    x_test, y_test=setup.test_data()
      
     std_y_train = torch.tensor(1.)
     if hasattr(setup, '_scaler_y'):
@@ -76,7 +125,7 @@ def ensemble_bootstrap(dataset,device,seed):
     input_dim=x_train.shape[1]
     model_list = []
       
-    num_models=5 #10
+    num_models=10 #10
     num_epochs=3000
     train_dataset = torch.utils.data.TensorDataset(x_train, y_train)
     size_data=len(train_dataset)
@@ -120,19 +169,19 @@ def ensemble_bootstrap(dataset,device,seed):
     for m_i in range(len(model_list)):
         #Evaluate the model
         model_list[m_i].eval()
-        y_ts.append(model_list[m_i](x_test).detach())
+        y_ts.append(model_list[m_i](x_pred).detach())
 
     y_t=torch.stack(y_ts, dim=0)
     y_t_mean = y_t.mean(axis=0)
     y_t_sigma = y_t.std(axis=0)
     
-    y_pred=y_t_mean+y_t_sigma* torch.randn(1000,len(x_test),1).to(device)
-    metrics=get_metrics(y_pred, torch.tensor(0.) , y_test, std_y_train, 'EnsembleB', time, noise=False)
-    return metrics
+    y_pred = y_t_mean+y_t_sigma* torch.randn(1000,len(x_pred),1).to(device)+\
+        setup.sigma_noise*torch.randn(1000,len(x_pred),1).to(device)
+    return y_pred
 
 
 
-def Mc_dropout(dataset,device,seed):
+def Mc_dropout(dataset,device):
     
     #MC_Dropout
     drop_prob=0.05
@@ -143,10 +192,11 @@ def Mc_dropout(dataset,device,seed):
     #TODO batch_size???
         
     setup_ = get_setup(dataset)
-    setup=setup_.Setup(device, seed=seed) 
+    setup=setup_.Setup(device) 
 
     x_train, y_train=setup.train_data()
     x_test, y_test=setup.test_data()
+
     
     batch_size=len(x_train) #128?
 
@@ -161,7 +211,7 @@ def Mc_dropout(dataset,device,seed):
 
     
         
-    def train_mc_dropout(x_train, y_train, batch_size, drop_prob, num_epochs, num_units, learn_rate, weight_decay):
+    def train_mc_dropout(x_train, y_train, batch_size, drop_prob, num_epochs, num_units, learn_rate, weight_decay, log_noise):
         
         in_dim = x_train.shape[1]
         out_dim = y_train.shape[1]
@@ -170,8 +220,8 @@ def Mc_dropout(dataset,device,seed):
         train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     
         net = MC_Dropout_Wrapper(input_dim=in_dim, output_dim=out_dim, no_units=num_units, \
-                                 learn_rate=learn_rate, train_loader=train_loader, init_log_noise=0, \
-                                 weight_decay=weight_decay, drop_prob=drop_prob,  device=device)
+                                 learn_rate=learn_rate, train_loader=train_loader, init_log_noise=log_noise, \
+                                 weight_decay=weight_decay, drop_prob=drop_prob,  device=device, learn_noise=False, activation=nn.Tanh())
 
 
         with trange(num_epochs) as tr:
@@ -185,14 +235,14 @@ def Mc_dropout(dataset,device,seed):
     start = timeit.default_timer()
     net  = train_mc_dropout(x_train=x_train,y_train=y_train, batch_size=batch_size,\
                             drop_prob=drop_prob, num_epochs=num_epochs,  num_units=layerwidth, \
-                            learn_rate=learn_rate, weight_decay=weight_decay)
+                            learn_rate=learn_rate, weight_decay=weight_decay, log_noise=np.log(setup.sigma_noise))
     stop = timeit.default_timer()
     time = stop - start
     
     samples=[]
     nb_predictors=1000# N
     for i in range(nb_predictors):
-        preds = net.network(x_test).detach() # T x 1
+        preds = net.network(x_pred).detach() # T x 1
         samples.append(preds)
      
     samples = torch.stack(samples) #N x T x 1
@@ -200,18 +250,16 @@ def Mc_dropout(dataset,device,seed):
     aleatoric = torch.exp(net.network.log_noise).detach() #1
     epistemic = samples.std(axis = 0).view(-1,1) #  T x 1
     sigma_noise = aleatoric.view(1,1,1) 
-    y_pred=means + epistemic * torch.randn(nb_predictors,len(x_test),1).to(device) # 1 x T x 1 + (T x 1)*(N x T x 1) = N x T x 1
-    metrics=get_metrics(y_pred, sigma_noise.cpu(), y_test, std_y_train, 'Mc_Drop', time)
-    return metrics
+    y_pred=means + epistemic * torch.randn(nb_predictors,len(x_pred),1).to(device) # 1 x T x 1 + (T x 1)*(N x T x 1) = N x T x 1
+    return y_pred
 
 
-def MFVI(dataset,device, seed):
+def MFVI(dataset,device):
     
     setup_ = get_setup(dataset)
-    setup=setup_.Setup(device, seed=seed) 
+    setup=setup_.Setup(device) 
 
     x_train, y_train=setup.train_data()
-    x_test, y_test=setup.test_data()
 
     std_y_train = torch.tensor(1.)
     if hasattr(setup, '_scaler_y'):
@@ -225,9 +273,9 @@ def MFVI(dataset,device, seed):
     input_dim=x_train.shape[1]
     param_count, model = get_mlp(input_dim, layerwidth, nblayers, activation) 
     
-    MFVI=MeanFieldVariationalDistribution(param_count, std_init=0. ,sigma=0.001, device=device)    
+    MFVI=MeanFieldVariationalDistribution(param_count, std_init=1. ,sigma=0.00001, device=device)    
 
-    _sigma_noise=torch.log(torch.tensor(1.).exp()-1.).clone().to(device).detach().requires_grad_(True)
+    _sigma_noise=torch.log(torch.tensor(setup.sigma_noise).exp()-1.).clone().to(device).detach().requires_grad_(False)
     sigma_noise = torch.log(torch.exp(_sigma_noise) + 1.)
 
     def ELBO(x_data, y_data, MFVI, _sigma_noise):
@@ -240,12 +288,12 @@ def MFVI(dataset,device, seed):
         the_ELBO= - Average_LogLikelihood+ (len(x_data)/size_data)* the_KL
         return the_ELBO, the_KL, Average_LogLikelihood, sigma_noise
     
-    optimizer = torch.optim.Adam(list(MFVI.parameters())+[_sigma_noise], lr=learning_rate)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=2*patience, factor=lr_decay, min_lr=min_lr)
+    optimizer = torch.optim.Adam(MFVI.parameters(), lr=learning_rate)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=3*patience, factor=lr_decay, min_lr=min_lr)
     Run=IVI(train_loader, ELBO, optimizer)
 
     start = timeit.default_timer()
-    with trange(n_epochs) as tr:
+    with trange(2*n_epochs) as tr:
         tr.set_description(desc=dataset+'/MFVI', refresh=False)
         for t in tr:
             scores=Run.run(MFVI,_sigma_noise)
@@ -260,17 +308,16 @@ def MFVI(dataset,device, seed):
 
     theta=MFVI(1000).detach()
     sigma_noise = torch.log(torch.exp(_sigma_noise) + 1.).detach().cpu()
-    y_pred=model(x_test,theta)
-    metrics=get_metrics(y_pred, sigma_noise, y_test, std_y_train, 'MFVI', time)
-    return metrics
+    y_pred=model(x_pred,theta)
+    y_pred+=sigma_noise*torch.randn_like(y_pred)
+    return y_pred
 
-def FuNNeMFVI(dataset,device, seed):
+def FuNNeMFVI(dataset,device):
 
     setup_ = get_setup(dataset)
-    setup=setup_.Setup(device, seed=seed) 
+    setup=setup_.Setup(device) 
 
     x_train, y_train=setup.train_data()
-    x_test, y_test=setup.test_data()
 
     std_y_train = torch.tensor(1.)
     if hasattr(setup, '_scaler_y'):
@@ -287,37 +334,8 @@ def FuNNeMFVI(dataset,device, seed):
     def prior(n):
         return sigma_prior*torch.randn(size=(n,param_count), device=device)
     
-
-    if input_sampling=='mixture':
-        def input_sampler(x_data):
-            n_ood=1
-            M = x_train.max(0, keepdim=True)[0]
-            m = x_train.min(0, keepdim=True)[0]
-            X_rand = torch.rand(n_ood,input_dim).to(device) * (M-m) + m                            
-            X=torch.cat([x_data,\
-                         x_data+0.1*torch.randn_like(x_data),\
-                         x_data+0.1*torch.randn_like(x_data),\
-                         x_data+0.1*torch.randn_like(x_data),
-                         X_rand])   
-            return X
-    
-    if input_sampling=='uniform':
-        def input_sampler(x_data):
-            n_ood=200
-            M = x_train.max(0, keepdim=True)[0]
-            m = x_train.min(0, keepdim=True)[0]
-            X = torch.rand(n_ood,input_dim).to(device) * (M-m) + m                           
-            return X
-    
-    if input_sampling=='uniform+data':
-        def input_sampler(x_data,n_ood=150):
-            M = x_train.max(0, keepdim=True)[0]
-            m = x_train.min(0, keepdim=True)[0]
-            X_rand = torch.rand(n_ood,input_dim).to(device) * (M-m) + m                           
-            return torch.cat([x_data,X_rand])
-    
     def projection(theta0,theta1, x_data):
-        X=input_sampler(x_data)
+        X=OOD_sampler()
         #compute projection on both paramters with model
         theta0_proj=model(X, theta0).squeeze(2)
         theta1_proj=model(X, theta1).squeeze(2)
@@ -330,7 +348,7 @@ def FuNNeMFVI(dataset,device, seed):
 
         theta_proj, theta_prior_proj = projection(theta, theta_prior,x_data)
 
-        K=KL(theta_proj, theta_prior_proj,k=kNNE,device=device)
+        K=KL(theta_proj, theta_prior_proj,k=5,device=device)
         return K
     
     
@@ -349,16 +367,16 @@ def FuNNeMFVI(dataset,device, seed):
 
     ## Parametrize noise for learning aleatoric uncertainty
     
-    _sigma_noise=torch.log(torch.tensor(1.).exp()-1.).clone().to(device).detach().requires_grad_(True)
+    _sigma_noise=torch.log(torch.tensor(setup.sigma_noise).exp()-1.).clone().to(device).detach().requires_grad_(False)
     sigma_noise = torch.log(torch.exp(_sigma_noise) + 1.)
 
-    optimizer = torch.optim.Adam(list(MFVI.parameters())+[_sigma_noise], lr=learning_rate)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=patience, factor=lr_decay, min_lr=min_lr)
+    optimizer = torch.optim.Adam(MFVI.parameters(), lr=learning_rate)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=3*patience, factor=lr_decay, min_lr=min_lr)
 
     Run=IVI(train_loader, ELBO, optimizer)
     
     start = timeit.default_timer()
-    with trange(n_epochs) as tr:
+    with trange(2*n_epochs) as tr:
         tr.set_description(desc=dataset+'/FuNNeMFVI', refresh=False)
         for t in tr:
             
@@ -375,107 +393,19 @@ def FuNNeMFVI(dataset,device, seed):
     
     theta=MFVI(1000).detach()
     sigma_noise = torch.log(torch.exp(_sigma_noise) + 1.).detach().cpu()
-    y_pred=model(x_test,theta)
-    metrics=get_metrics(y_pred, sigma_noise, y_test, std_y_train, 'FuNNeMFVI', time)
-    return metrics
+    y_pred=model(x_pred,theta)
+    y_pred+=sigma_noise*torch.randn_like(y_pred)
+    return y_pred
 
 
-def FuNNeVI_GPprior(dataset,device, seed):
-
-    setup_ = get_setup(dataset)
-    setup=setup_.Setup(device, seed=seed) 
-
-    x_train, y_train=setup.train_data()
-    x_test, y_test=setup.test_data()
-
-    std_y_train = torch.tensor(1.)
-    if hasattr(setup, '_scaler_y'):
-        std_y_train=torch.tensor(setup._scaler_y.scale_, device=device).squeeze().float()
-
-    train_dataset = torch.utils.data.TensorDataset(x_train, y_train)
-    size_data=len(train_dataset)
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-
-    ## predictive model
-    input_dim=x_train.shape[1]
-    param_count, model = get_mlp(input_dim, layerwidth, nblayers, activation)
-        
-    prior=GaussianProcess(mean=torch.tensor(0.),lengthscale=1., noise=0.1)    
-
- 
-    if input_sampling=='uniform':
-        def input_sampler(x_data,n_ood=200):
-            M = x_train.max(0, keepdim=True)[0]
-            m = x_train.min(0, keepdim=True)[0]
-            X_rand = torch.rand(n_ood,input_dim).to(device) * (M-m) + m                           
-            return X_rand
-
-    if input_sampling=='uniform+data':
-        def input_sampler(x_data,n_ood=150):
-            M = x_train.max(0, keepdim=True)[0]
-            m = x_train.min(0, keepdim=True)[0]
-            X_rand = torch.rand(n_ood,input_dim).to(device) * (M-m) + m                           
-            return torch.cat([x_data,X_rand])
-        
-    def kl(x_data,theta):
-        X_ood=input_sampler(x_data)
-        f_theta=model(X_ood, theta).squeeze(2)
-        H=Entropy(f_theta,k_MC=X_ood.shape[0])
-        logtarget=prior.log_prob(X_ood,f_theta)
-        return -H-logtarget.mean()   
-    
-    def ELBO(x_data, y_data, GeN, _sigma_noise):
-        y_pred=model(x_data,GeN(n_samples_LL))
-        sigma_noise = torch.log(torch.exp(_sigma_noise) + 1.)
-
-        Average_LogLikelihood=AverageNormalLogLikelihood(y_pred, y_data, sigma_noise)
-        the_KL=kl(x_data, GeN(n_samples_KL))
-        the_ELBO= - Average_LogLikelihood+ (len(x_data)/size_data)* the_KL
-        return the_ELBO, the_KL, Average_LogLikelihood, sigma_noise
-
-    #generative model
-    GeN = BigGenerator(lat_dim,param_count,device).to(device)
-
-    ## Parametrize noise for learning aleatoric uncertainty
-    
-    _sigma_noise=torch.log(torch.tensor(1.).exp()-1.).clone().to(device).detach().requires_grad_(True)
-    sigma_noise = torch.log(torch.exp(_sigma_noise) + 1.)
-
-    optimizer = torch.optim.Adam(list(GeN.parameters())+[_sigma_noise], lr=learning_rate)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=patience, factor=lr_decay, min_lr=min_lr)
-
-    Run=IVI(train_loader, ELBO, optimizer)
-    
-    start = timeit.default_timer()
-    with trange(n_epochs) as tr:
-        tr.set_description(desc=dataset+'/FuNNeVI-GP', refresh=False)
-        for t in tr:
-            
-            
-            scores=Run.run(GeN,_sigma_noise)
-
-            scheduler.step(scores['ELBO'])
-            tr.set_postfix(ELBO=scores['ELBO'], LogLike=scores['LL'], KL=scores['KL'], lr=scores['lr'], sigma=scores['sigma'])
-
-            if scores['lr'] <= 1e-4:
-                break
-    stop = timeit.default_timer()
-    time = stop - start
-    
-    theta=GeN(1000).detach()
-    sigma_noise = torch.log(torch.exp(_sigma_noise) + 1.).detach().cpu()
-    y_pred=model(x_test,theta)
-    metrics=get_metrics(y_pred, sigma_noise, y_test, std_y_train, 'FuNNeVI-GP', time)
-    return metrics
 
 
-def FuNNeVI(dataset,device, seed):
+def FuNNeVI(dataset,device):
 
     setup_ = get_setup(dataset)
-    setup=setup_.Setup(device, seed=seed) 
+    setup=setup_.Setup(device) 
 
     x_train, y_train=setup.train_data()
-    x_test, y_test=setup.test_data()
 
     std_y_train = torch.tensor(1.)
     if hasattr(setup, '_scaler_y'):
@@ -492,37 +422,9 @@ def FuNNeVI(dataset,device, seed):
     def prior(n):
         return sigma_prior*torch.randn(size=(n,param_count), device=device)
     
-
-    if input_sampling=='mixture':
-        def input_sampler(x_data):
-            n_ood=1
-            M = x_train.max(0, keepdim=True)[0]
-            m = x_train.min(0, keepdim=True)[0]
-            X_rand = torch.rand(n_ood,input_dim).to(device) * (M-m) + m                            
-            X=torch.cat([x_data,\
-                         x_data+0.1*torch.randn_like(x_data),\
-                         x_data+0.1*torch.randn_like(x_data),\
-                         x_data+0.1*torch.randn_like(x_data),
-                         X_rand])   
-            return X
-    
-    if input_sampling=='uniform':
-        def input_sampler(x_data):
-            n_ood=200
-            M = x_train.max(0, keepdim=True)[0]
-            m = x_train.min(0, keepdim=True)[0]
-            X = torch.rand(n_ood,input_dim).to(device) * (M-m) + m                           
-            return X
-    
-    if input_sampling=='uniform+data':
-        def input_sampler(x_data,n_ood=150):
-            M = x_train.max(0, keepdim=True)[0]
-            m = x_train.min(0, keepdim=True)[0]
-            X_rand = torch.rand(n_ood,input_dim).to(device) * (M-m) + m                           
-            return torch.cat([x_data,X_rand])
     
     def projection(theta0,theta1, x_data):
-        X=input_sampler(x_data)
+        X=OOD_sampler()
         #compute projection on both paramters with model
         theta0_proj=model(X, theta0).squeeze(2)
         theta1_proj=model(X, theta1).squeeze(2)
@@ -554,10 +456,10 @@ def FuNNeVI(dataset,device, seed):
 
     ## Parametrize noise for learning aleatoric uncertainty
     
-    _sigma_noise=torch.log(torch.tensor(1.).exp()-1.).clone().to(device).detach().requires_grad_(True)
+    _sigma_noise=torch.log(torch.tensor(setup.sigma_noise).exp()-1.).clone().to(device).detach().requires_grad_(False)
     sigma_noise = torch.log(torch.exp(_sigma_noise) + 1.)
 
-    optimizer = torch.optim.Adam(list(GeN.parameters())+[_sigma_noise], lr=learning_rate)
+    optimizer = torch.optim.Adam(GeN.parameters(), lr=learning_rate)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=patience, factor=lr_decay, min_lr=min_lr)
 
     Run=IVI(train_loader, ELBO, optimizer)
@@ -580,18 +482,17 @@ def FuNNeVI(dataset,device, seed):
     
     theta=GeN(1000).detach()
     sigma_noise = torch.log(torch.exp(_sigma_noise) + 1.).detach().cpu()
-    y_pred=model(x_test,theta)
-    metrics=get_metrics(y_pred, sigma_noise, y_test, std_y_train, 'FuNNeVI', time)
-    return metrics
+    y_pred=model(x_pred,theta)
+    y_pred+=sigma_noise*torch.randn_like(y_pred)
+    return y_pred
 
 
-def GeNNeVI(dataset,device, seed):
+def GeNNeVI(dataset,device):
 
     setup_ = get_setup(dataset)
-    setup=setup_.Setup(device, seed=seed) 
+    setup=setup_.Setup(device) 
 
     x_train, y_train=setup.train_data()
-    x_test, y_test=setup.test_data()
 
     std_y_train = torch.tensor(1.)
     if hasattr(setup, '_scaler_y'):
@@ -632,10 +533,10 @@ def GeNNeVI(dataset,device, seed):
 
     ## Parametrize noise for learning aleatoric uncertainty
     
-    _sigma_noise=torch.log(torch.tensor(1.0).exp()-1.).clone().to(device).detach().requires_grad_(True)
+    _sigma_noise=torch.log(torch.tensor(setup.sigma_noise).exp()-1.).clone().to(device).detach().requires_grad_(False)
     sigma_noise = torch.log(torch.exp(_sigma_noise) + 1.)
 
-    optimizer = torch.optim.Adam(list(GeN.parameters())+[_sigma_noise], lr=learning_rate)
+    optimizer = torch.optim.Adam(GeN.parameters(), lr=learning_rate)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=patience, factor=lr_decay, min_lr=min_lr)
 
     Run=IVI(train_loader, ELBO, optimizer)
@@ -658,26 +559,28 @@ def GeNNeVI(dataset,device, seed):
     
     theta=GeN(1000).detach()
     sigma_noise = torch.log(torch.exp(_sigma_noise) + 1.).detach().cpu()
-    y_pred=model(x_test,theta)
-    metrics=get_metrics(y_pred, sigma_noise, y_test, std_y_train, 'GeNNeVI', time)
-    return metrics
+    y_pred=model(x_pred,theta)
+    y_pred+=sigma_noise*torch.randn_like(y_pred)
+    return y_pred
 
-def get_metrics(y_pred, sigma_noise, y_test, std_y_train, method, time, noise=True):
-    metrics=evaluate_metrics(y_pred, sigma_noise.view(1,1,1), y_test,  std_y_train, device='cpu', std=False, noise=noise)
-    metrics.update({'time [s]': time})
-    metrics.update({'std noise': sigma_noise.item()})
-    return metrics
+models_HMC = torch.load('Results/HMC_models.pt')
 
-def MeanStd(metric_list, method):
-    df=pd.DataFrame(metric_list)
-    mean=df.mean().to_dict()
-    std=df.std().to_dict()
-    metrics=list(mean.keys())
-    for j in metrics:
-        mean[(method,j)] = mean.pop(j)
-        std[(method,j)] = std.pop(j)
-    return mean, std
 
+def HMC(dataset,device):
+    setup_ = get_setup(dataset)
+    setup=setup_.Setup(device) 
+    
+    ## predictive model
+    input_dim=setup.input_dim
+    param_count, model = get_mlp(input_dim, layerwidth, nblayers, activation)
+
+    HMC_=models_HMC[dataset]
+    indices = torch.randperm(len(HMC_))[:1000]
+    HMC=HMC_[indices].to(device)
+    sigma_noise = torch.tensor(setup.sigma_noise)
+    y_pred=model(x_pred,HMC)
+    y_pred+=sigma_noise*torch.randn_like(y_pred)
+    return y_pred
 
 
 if __name__ == "__main__":
@@ -685,8 +588,11 @@ if __name__ == "__main__":
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
     date_string = datetime.now().strftime("%Y-%m-%d-%H:%M")
-    file_name='Results/NEW/UCI_splits'+date_string
+    file_name='Results/NEW/WAVE_OOS'+date_string
     makedirs(file_name)
+
+    x_pred=torch.linspace(-4.,2.,500).unsqueeze(-1).to(device)
+
 
     with open(file_name, 'w') as f:
         script=open(__file__)
@@ -694,62 +600,37 @@ if __name__ == "__main__":
 
     ## small 
     batch_size=50
-    datasets=['boston','concrete', 'energy', 'wine', 'yacht']
+    dataset='foong'#['boston','concrete', 'energy', 'wine', 'yacht']
         
-#     ## large
-#     batch_size=500
-#     datasets=['kin8nm','powerplant','navalC','protein']
-
-    RESULTS, STDS=torch.load('Results/NEW/UCI_splits2020-10-08-13:48.pt')#{dataset:{} for dataset in datasets}, {dataset:{} for dataset in datasets}
-
-    SEEDS=[117+i for i in range(10)]
+    RESULTS=torch.load('Results/NEW/WAVE_OOS2020-10-12-09:49.pt')#torch.load('Results/NEW/WAVE_OOS2020-10-10-20:02.pt')#{}
     
-    for dataset in datasets:
-        print(dataset)     
- 
-        metrics={}
-        stds={}
-        
-        results=[ensemble_bootstrap(dataset,device, seed) for seed in SEEDS]
-        print(results)
-        mean, std= MeanStd(results, 'EnsembleB')
-        metrics.update(mean)
-        stds.update(std)
-        
-        print(metrics)
-#         results=[Mc_dropout(dataset,device, seed) for seed in SEEDS]
-#         mean, std= MeanStd(results, 'McDropOut')
-#         metrics.update(mean)
-#         stds.update(std)
-        
-#         results=[FuNNeMFVI(dataset,device, seed) for seed in SEEDS]
-#         mean, std= MeanStd(results, 'FuNNeMFVI')
-#         metrics.update(mean)
-#         stds.update(std)
-        
-        
-#         results=[MFVI(dataset,device, seed) for seed in SEEDS]
-#         mean, std= MeanStd(results, 'MFVI')
-#         metrics.update(mean)
-#         stds.update(std)
-                       
-#         results=[GeNNeVI(dataset,device, seed) for seed in SEEDS]
-#         mean, std= MeanStd(results, 'GeNNeVI')
-#         metrics.update(mean)
-#         stds.update(std)
-        
-#         results=[FuNNeVI(dataset,device, seed) for seed in SEEDS]
-#         mean, std= MeanStd(results, 'FuNNeVI')
-#         metrics.update(mean)
-#         stds.update(std)
-        
-#         results=[FuNNeVI_GPprior(dataset,device, seed) for seed in SEEDS]
-#         mean, std= MeanStd(results, 'FuNNeVI-GP')
-#         metrics.update(mean)
-#         stds.update(std)
-        
-            
-        RESULTS[dataset].update(metrics)
-        STDS[dataset].update(stds)
-        
-        torch.save((RESULTS,STDS),file_name+'.pt')
+#     method='EnsembleB'
+#     y_pred=ensemble_bootstrap(dataset,device)
+#     RESULTS.update({method:y_pred})
+
+#     method='McDropOut'
+#     y_pred=Mc_dropout(dataset,device)
+#     RESULTS.update({method:y_pred})
+
+#     method='FuNNeMFVI'
+#     y_pred=FuNNeMFVI(dataset,device)
+#     RESULTS.update({method:y_pred})
+
+#     method='MFVI'
+#     y_pred=MFVI(dataset,device)
+#     RESULTS.update({method:y_pred})
+
+#     method='GeNNeVI'
+#     y_pred=GeNNeVI(dataset,device)
+#     RESULTS.update({method:y_pred})
+   
+    method='FuNNeVI'
+    y_pred=FuNNeVI(dataset,device)
+    RESULTS.update({method:y_pred})
+
+#     method='HMC'
+#     y_pred=HMC(dataset,device)
+#     RESULTS.update({method:y_pred})
+  
+
+    torch.save(RESULTS,file_name+'.pt')

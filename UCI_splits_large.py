@@ -31,7 +31,7 @@ def makedirs(filename):
 ## Hyperparameters ##
 
 #predictive model
-layerwidth=50
+layerwidth=100
 nblayers=1
 activation=nn.ReLU()
 
@@ -42,7 +42,7 @@ lat_dim=5
 learning_rate=0.005
 
 #scheduler
-patience=30
+patience=10
 lr_decay=.7#.7
 min_lr= 0.0001
 n_epochs=2000#5000#2000
@@ -58,8 +58,7 @@ kNNE=1 #k-nearest neighbour
 sigma_prior=.5# TO DO check with other experiments setup.sigma_prior    
 
 
-input_sampling='uniform' #'uniform', 'uniform+data'
-
+input_sampling='uniform' 
 
 def ensemble_bootstrap(dataset,device,seed):
     setup_ = get_setup(dataset)
@@ -67,6 +66,7 @@ def ensemble_bootstrap(dataset,device,seed):
 
     x_train, y_train=setup.train_data()
     x_test, y_test=setup.test_data()
+    
      
     std_y_train = torch.tensor(1.)
     if hasattr(setup, '_scaler_y'):
@@ -77,7 +77,7 @@ def ensemble_bootstrap(dataset,device,seed):
     model_list = []
       
     num_models=5 #10
-    num_epochs=3000
+    num_epochs=500#n_epochs
     train_dataset = torch.utils.data.TensorDataset(x_train, y_train)
     size_data=len(train_dataset)
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
@@ -136,7 +136,7 @@ def Mc_dropout(dataset,device,seed):
     
     #MC_Dropout
     drop_prob=0.05
-    num_epochs=2000 #4x500 = 20000 yarin gal
+    num_epochs=2000#n_epochs #4x500 = 20000 yarin gal
     learn_rate=1e-3
     
     #batch_size=128
@@ -260,7 +260,7 @@ def MFVI(dataset,device, seed):
 
     theta=MFVI(1000).detach()
     sigma_noise = torch.log(torch.exp(_sigma_noise) + 1.).detach().cpu()
-    y_pred=model(x_test,theta)
+    y_pred=model(x_test.cpu(),theta.cpu())
     metrics=get_metrics(y_pred, sigma_noise, y_test, std_y_train, 'MFVI', time)
     return metrics
 
@@ -375,7 +375,7 @@ def FuNNeMFVI(dataset,device, seed):
     
     theta=MFVI(1000).detach()
     sigma_noise = torch.log(torch.exp(_sigma_noise) + 1.).detach().cpu()
-    y_pred=model(x_test,theta)
+    y_pred=model(x_test.cpu(),theta.cpu())
     metrics=get_metrics(y_pred, sigma_noise, y_test, std_y_train, 'FuNNeMFVI', time)
     return metrics
 
@@ -464,7 +464,7 @@ def FuNNeVI_GPprior(dataset,device, seed):
     
     theta=GeN(1000).detach()
     sigma_noise = torch.log(torch.exp(_sigma_noise) + 1.).detach().cpu()
-    y_pred=model(x_test,theta)
+    y_pred=model(x_test.cpu(),theta.cpu())
     metrics=get_metrics(y_pred, sigma_noise, y_test, std_y_train, 'FuNNeVI-GP', time)
     return metrics
 
@@ -580,7 +580,7 @@ def FuNNeVI(dataset,device, seed):
     
     theta=GeN(1000).detach()
     sigma_noise = torch.log(torch.exp(_sigma_noise) + 1.).detach().cpu()
-    y_pred=model(x_test,theta)
+    y_pred=model(x_test.cpu(),theta.cpu())
     metrics=get_metrics(y_pred, sigma_noise, y_test, std_y_train, 'FuNNeVI', time)
     return metrics
 
@@ -658,7 +658,7 @@ def GeNNeVI(dataset,device, seed):
     
     theta=GeN(1000).detach()
     sigma_noise = torch.log(torch.exp(_sigma_noise) + 1.).detach().cpu()
-    y_pred=model(x_test,theta)
+    y_pred=model(x_test.cpu(),theta.cpu())
     metrics=get_metrics(y_pred, sigma_noise, y_test, std_y_train, 'GeNNeVI', time)
     return metrics
 
@@ -685,24 +685,26 @@ if __name__ == "__main__":
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
     date_string = datetime.now().strftime("%Y-%m-%d-%H:%M")
-    file_name='Results/NEW/UCI_splits'+date_string
+    file_name='Results/NEW/UCI_splits_large'+date_string
     makedirs(file_name)
 
     with open(file_name, 'w') as f:
         script=open(__file__)
         f.write(script.read())  
 
-    ## small 
-    batch_size=50
-    datasets=['boston','concrete', 'energy', 'wine', 'yacht']
+#     ## small 
+#     batch_size=50
+#     datasets=['boston','concrete', 'energy', 'wine', 'yacht']
         
-#     ## large
-#     batch_size=500
-#     datasets=['kin8nm','powerplant','navalC','protein']
+    ## large
+    batch_size=500
+    datasets=['protein']#['kin8nm','navalC','powerplant']#,
 
-    RESULTS, STDS=torch.load('Results/NEW/UCI_splits2020-10-08-13:48.pt')#{dataset:{} for dataset in datasets}, {dataset:{} for dataset in datasets}
+    RESULTS, STDS=torch.load('Results/NEW/UCI_splits_large2020-10-13-13:53.pt')
+#    RESULTS.update({'protein':{}}), STDS.update({'protein':{}})
+   #{dataset:{} for dataset in datasets}, {dataset:{} for dataset in datasets}#torch.load('Results/NEW/UCI_splits2020-10-08-13:48.pt')#{dataset:{} for dataset in datasets}, {dataset:{} for dataset in datasets}
 
-    SEEDS=[117+i for i in range(10)]
+    SEEDS=[117+i for i in range(5)]
     
     for dataset in datasets:
         print(dataset)     
@@ -710,38 +712,71 @@ if __name__ == "__main__":
         metrics={}
         stds={}
         
-        results=[ensemble_bootstrap(dataset,device, seed) for seed in SEEDS]
-        print(results)
-        mean, std= MeanStd(results, 'EnsembleB')
-        metrics.update(mean)
-        stds.update(std)
+#         RESULTS[dataset].update(metrics)
+#         STDS[dataset].update(stds)      
+#         torch.save((RESULTS,STDS),file_name+'.pt')
         
-        print(metrics)
+#         results=[ensemble_bootstrap(dataset,device, seed) for seed in SEEDS]
+#         mean, std= MeanStd(results, 'EnsembleB')
+#         metrics.update(mean)
+#         stds.update(std)
+        
+#         RESULTS[dataset].update(metrics)
+#         STDS[dataset].update(stds)      
+#         torch.save((RESULTS,STDS),file_name+'.pt')
+        
 #         results=[Mc_dropout(dataset,device, seed) for seed in SEEDS]
 #         mean, std= MeanStd(results, 'McDropOut')
 #         metrics.update(mean)
 #         stds.update(std)
         
-#         results=[FuNNeMFVI(dataset,device, seed) for seed in SEEDS]
-#         mean, std= MeanStd(results, 'FuNNeMFVI')
-#         metrics.update(mean)
-#         stds.update(std)
+#         RESULTS[dataset].update(metrics)
+#         STDS[dataset].update(stds)        
+#         torch.save((RESULTS,STDS),file_name+'.pt')
+
         
+        results=[FuNNeMFVI(dataset,device, seed) for seed in SEEDS]
+        mean, std= MeanStd(results, 'FuNNeMFVI')
+        metrics.update(mean)
+        stds.update(std)
         
-#         results=[MFVI(dataset,device, seed) for seed in SEEDS]
-#         mean, std= MeanStd(results, 'MFVI')
-#         metrics.update(mean)
-#         stds.update(std)
+                
+        RESULTS[dataset].update(metrics)
+        STDS[dataset].update(stds)        
+        torch.save((RESULTS,STDS),file_name+'.pt')
+
+        
+        results=[MFVI(dataset,device, seed) for seed in SEEDS]
+        mean, std= MeanStd(results, 'MFVI')
+        metrics.update(mean)
+        stds.update(std)
                        
-#         results=[GeNNeVI(dataset,device, seed) for seed in SEEDS]
-#         mean, std= MeanStd(results, 'GeNNeVI')
-#         metrics.update(mean)
-#         stds.update(std)
+                
+        RESULTS[dataset].update(metrics)
+        STDS[dataset].update(stds)        
+        torch.save((RESULTS,STDS),file_name+'.pt')
+
+        results=[GeNNeVI(dataset,device, seed) for seed in SEEDS]
+        mean, std= MeanStd(results, 'GeNNeVI')
+        metrics.update(mean)
+        stds.update(std)
         
-#         results=[FuNNeVI(dataset,device, seed) for seed in SEEDS]
-#         mean, std= MeanStd(results, 'FuNNeVI')
-#         metrics.update(mean)
-#         stds.update(std)
+                
+        RESULTS[dataset].update(metrics)
+        STDS[dataset].update(stds)        
+        torch.save((RESULTS,STDS),file_name+'.pt')
+
+        
+        results=[FuNNeVI(dataset,device, seed) for seed in SEEDS]
+        mean, std= MeanStd(results, 'FuNNeVI')
+        metrics.update(mean)
+        stds.update(std)
+        
+                
+        RESULTS[dataset].update(metrics)
+        STDS[dataset].update(stds)
+        torch.save((RESULTS,STDS),file_name+'.pt')
+
         
 #         results=[FuNNeVI_GPprior(dataset,device, seed) for seed in SEEDS]
 #         mean, std= MeanStd(results, 'FuNNeVI-GP')
@@ -749,7 +784,7 @@ if __name__ == "__main__":
 #         stds.update(std)
         
             
-        RESULTS[dataset].update(metrics)
-        STDS[dataset].update(stds)
+#         RESULTS[dataset].update(metrics)
+#         STDS[dataset].update(stds)
         
         torch.save((RESULTS,STDS),file_name+'.pt')

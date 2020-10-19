@@ -19,6 +19,8 @@ from Inference.IVI_noise import IVI
 
 from tqdm import trange
 
+import itertools
+
 import timeit
 import os
 
@@ -57,158 +59,21 @@ kNNE=1 #k-nearest neighbour
 
 sigma_prior=.5# TO DO check with other experiments setup.sigma_prior    
 
+models_HMC = torch.load('Results/HMC_models.pt')
 
 input_sampling='uniform' #'uniform', 'uniform+data'
 
-
-def ensemble_bootstrap(dataset,device,seed):
-    setup_ = get_setup(dataset)
-    setup=setup_.Setup(device, seed=seed) 
-
-    x_train, y_train=setup.train_data()
-    x_test, y_test=setup.test_data()
-     
-    std_y_train = torch.tensor(1.)
-    if hasattr(setup, '_scaler_y'):
-        std_y_train=torch.tensor(setup._scaler_y.scale_, device=device).squeeze().float()
-
-    N = x_train.shape[0]
-    input_dim=x_train.shape[1]
-    model_list = []
-      
-    num_models=5 #10
-    num_epochs=3000
-    train_dataset = torch.utils.data.TensorDataset(x_train, y_train)
-    size_data=len(train_dataset)
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-
-    start = timeit.default_timer()
-
-    for m_i in range(num_models):
-        
-        model = torch.nn.Sequential(
-            torch.nn.Linear(input_dim, layerwidth),
-            activation,
-            torch.nn.Linear(layerwidth, 1))
-        model.to(device)
-
-        loss = torch.nn.MSELoss()
-        optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
-
-        with trange(num_epochs) as tr:
-            tr.set_description(desc=dataset+'/EnsembleB-{}'.format(m_i), refresh=False)
-            for t in tr:
-                cost = 0.
-                count_batch=0
-                for x,y in train_loader:
-                    optimizer.zero_grad()
-                    fx = model(x)
-                    output = loss(fx, y)
-                    output.backward()
-                    optimizer.step()
-
-                    cost += output.item() *len(x)
-                    count_batch+=1
-                tr.set_postfix(loss=cost/count_batch)              
-        model_list.append(model)
-    
-    stop = timeit.default_timer()
-    time = stop - start
-
-    y_ts = [] 
-
-    for m_i in range(len(model_list)):
-        #Evaluate the model
-        model_list[m_i].eval()
-        y_ts.append(model_list[m_i](x_test).detach())
-
-    y_t=torch.stack(y_ts, dim=0)
-    y_t_mean = y_t.mean(axis=0)
-    y_t_sigma = y_t.std(axis=0)
-    
-    y_pred=y_t_mean+y_t_sigma* torch.randn(1000,len(x_test),1).to(device)
-    metrics=get_metrics(y_pred, torch.tensor(0.) , y_test, std_y_train, 'EnsembleB', time, noise=False)
-    return metrics
+def OOD_sampler(x_train,n_ood):
+    M = x_train.max(0, keepdim=True)[0]
+    m = x_train.min(0, keepdim=True)[0]
+    X = torch.rand(n_ood,x_train.shape[1]).to(device) * (M-m) + m                           
+    return X
 
 
-
-def Mc_dropout(dataset,device,seed):
-    
-    #MC_Dropout
-    drop_prob=0.05
-    num_epochs=2000 #4x500 = 20000 yarin gal
-    learn_rate=1e-3
-    
-    #batch_size=128
-    #TODO batch_size???
-        
-    setup_ = get_setup(dataset)
-    setup=setup_.Setup(device, seed=seed) 
-
-    x_train, y_train=setup.train_data()
-    x_test, y_test=setup.test_data()
-    
-    batch_size=len(x_train) #128?
-
-    
-    weight_decay= 1e-1/(len(x_train)+len(x_test))**0.5
-
-    
-    
-    std_y_train = torch.tensor(1.)
-    if hasattr(setup, '_scaler_y'):
-        std_y_train=torch.tensor(setup._scaler_y.scale_, device=device).squeeze().float()
-
-    
-        
-    def train_mc_dropout(x_train, y_train, batch_size, drop_prob, num_epochs, num_units, learn_rate, weight_decay):
-        
-        in_dim = x_train.shape[1]
-        out_dim = y_train.shape[1]
-        
-        train_dataset = torch.utils.data.TensorDataset(x_train, y_train)
-        train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    
-        net = MC_Dropout_Wrapper(input_dim=in_dim, output_dim=out_dim, no_units=num_units, \
-                                 learn_rate=learn_rate, train_loader=train_loader, init_log_noise=0, \
-                                 weight_decay=weight_decay, drop_prob=drop_prob,  device=device)
-
-
-        with trange(num_epochs) as tr:
-            tr.set_description(desc=dataset+'/McDropout', refresh=False)
-            for t in tr:            
-                loss = net.fit()
-                tr.set_postfix(loss=loss)              
-        return net
-    
-    
-    start = timeit.default_timer()
-    net  = train_mc_dropout(x_train=x_train,y_train=y_train, batch_size=batch_size,\
-                            drop_prob=drop_prob, num_epochs=num_epochs,  num_units=layerwidth, \
-                            learn_rate=learn_rate, weight_decay=weight_decay)
-    stop = timeit.default_timer()
-    time = stop - start
-    
-    samples=[]
-    nb_predictors=1000# N
-    for i in range(nb_predictors):
-        preds = net.network(x_test).detach() # T x 1
-        samples.append(preds)
-     
-    samples = torch.stack(samples) #N x T x 1
-    means = samples.mean(axis = 0).view(1,-1,1) #1 x T x 1
-    aleatoric = torch.exp(net.network.log_noise).detach() #1
-    epistemic = samples.std(axis = 0).view(-1,1) #  T x 1
-    sigma_noise = aleatoric.view(1,1,1) 
-    y_pred=means + epistemic * torch.randn(nb_predictors,len(x_test),1).to(device) # 1 x T x 1 + (T x 1)*(N x T x 1) = N x T x 1
-    metrics=get_metrics(y_pred, sigma_noise.cpu(), y_test, std_y_train, 'Mc_Drop', time)
-    return metrics
-
-
-def MFVI(dataset,device, seed):
+def MFVI(dataset,device):
     
     setup_ = get_setup(dataset)
-    setup=setup_.Setup(device, seed=seed) 
+    setup=setup_.Setup(device) 
 
     x_train, y_train=setup.train_data()
     x_test, y_test=setup.test_data()
@@ -225,9 +90,9 @@ def MFVI(dataset,device, seed):
     input_dim=x_train.shape[1]
     param_count, model = get_mlp(input_dim, layerwidth, nblayers, activation) 
     
-    MFVI=MeanFieldVariationalDistribution(param_count, std_init=0. ,sigma=0.001, device=device)    
+    MFVI=MeanFieldVariationalDistribution(param_count, std_init=0.1 ,sigma=0.001, device=device)    
 
-    _sigma_noise=torch.log(torch.tensor(1.).exp()-1.).clone().to(device).detach().requires_grad_(True)
+    _sigma_noise=torch.log(torch.tensor(setup.sigma_noise).exp()-1.).clone().to(device).detach().requires_grad_(False)
     sigma_noise = torch.log(torch.exp(_sigma_noise) + 1.)
 
     def ELBO(x_data, y_data, MFVI, _sigma_noise):
@@ -240,7 +105,7 @@ def MFVI(dataset,device, seed):
         the_ELBO= - Average_LogLikelihood+ (len(x_data)/size_data)* the_KL
         return the_ELBO, the_KL, Average_LogLikelihood, sigma_noise
     
-    optimizer = torch.optim.Adam(list(MFVI.parameters())+[_sigma_noise], lr=learning_rate)
+    optimizer = torch.optim.Adam(MFVI.parameters(), lr=learning_rate)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=2*patience, factor=lr_decay, min_lr=min_lr)
     Run=IVI(train_loader, ELBO, optimizer)
 
@@ -262,12 +127,12 @@ def MFVI(dataset,device, seed):
     sigma_noise = torch.log(torch.exp(_sigma_noise) + 1.).detach().cpu()
     y_pred=model(x_test,theta)
     metrics=get_metrics(y_pred, sigma_noise, y_test, std_y_train, 'MFVI', time)
-    return metrics
+    return theta, metrics
 
-def FuNNeMFVI(dataset,device, seed):
+def FuNNeMFVI(dataset,device):
 
     setup_ = get_setup(dataset)
-    setup=setup_.Setup(device, seed=seed) 
+    setup=setup_.Setup(device) 
 
     x_train, y_train=setup.train_data()
     x_test, y_test=setup.test_data()
@@ -349,10 +214,10 @@ def FuNNeMFVI(dataset,device, seed):
 
     ## Parametrize noise for learning aleatoric uncertainty
     
-    _sigma_noise=torch.log(torch.tensor(1.).exp()-1.).clone().to(device).detach().requires_grad_(True)
+    _sigma_noise=torch.log(torch.tensor(setup.sigma_noise).exp()-1.).clone().to(device).detach().requires_grad_(False)
     sigma_noise = torch.log(torch.exp(_sigma_noise) + 1.)
 
-    optimizer = torch.optim.Adam(list(MFVI.parameters())+[_sigma_noise], lr=learning_rate)
+    optimizer = torch.optim.Adam(MFVI.parameters(), lr=learning_rate)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=patience, factor=lr_decay, min_lr=min_lr)
 
     Run=IVI(train_loader, ELBO, optimizer)
@@ -377,102 +242,13 @@ def FuNNeMFVI(dataset,device, seed):
     sigma_noise = torch.log(torch.exp(_sigma_noise) + 1.).detach().cpu()
     y_pred=model(x_test,theta)
     metrics=get_metrics(y_pred, sigma_noise, y_test, std_y_train, 'FuNNeMFVI', time)
-    return metrics
+    return theta, metrics
 
 
-def FuNNeVI_GPprior(dataset,device, seed):
-
-    setup_ = get_setup(dataset)
-    setup=setup_.Setup(device, seed=seed) 
-
-    x_train, y_train=setup.train_data()
-    x_test, y_test=setup.test_data()
-
-    std_y_train = torch.tensor(1.)
-    if hasattr(setup, '_scaler_y'):
-        std_y_train=torch.tensor(setup._scaler_y.scale_, device=device).squeeze().float()
-
-    train_dataset = torch.utils.data.TensorDataset(x_train, y_train)
-    size_data=len(train_dataset)
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-
-    ## predictive model
-    input_dim=x_train.shape[1]
-    param_count, model = get_mlp(input_dim, layerwidth, nblayers, activation)
-        
-    prior=GaussianProcess(mean=torch.tensor(0.),lengthscale=1., noise=0.1)    
-
- 
-    if input_sampling=='uniform':
-        def input_sampler(x_data,n_ood=200):
-            M = x_train.max(0, keepdim=True)[0]
-            m = x_train.min(0, keepdim=True)[0]
-            X_rand = torch.rand(n_ood,input_dim).to(device) * (M-m) + m                           
-            return X_rand
-
-    if input_sampling=='uniform+data':
-        def input_sampler(x_data,n_ood=150):
-            M = x_train.max(0, keepdim=True)[0]
-            m = x_train.min(0, keepdim=True)[0]
-            X_rand = torch.rand(n_ood,input_dim).to(device) * (M-m) + m                           
-            return torch.cat([x_data,X_rand])
-        
-    def kl(x_data,theta):
-        X_ood=input_sampler(x_data)
-        f_theta=model(X_ood, theta).squeeze(2)
-        H=Entropy(f_theta,k_MC=X_ood.shape[0])
-        logtarget=prior.log_prob(X_ood,f_theta)
-        return -H-logtarget.mean()   
-    
-    def ELBO(x_data, y_data, GeN, _sigma_noise):
-        y_pred=model(x_data,GeN(n_samples_LL))
-        sigma_noise = torch.log(torch.exp(_sigma_noise) + 1.)
-
-        Average_LogLikelihood=AverageNormalLogLikelihood(y_pred, y_data, sigma_noise)
-        the_KL=kl(x_data, GeN(n_samples_KL))
-        the_ELBO= - Average_LogLikelihood+ (len(x_data)/size_data)* the_KL
-        return the_ELBO, the_KL, Average_LogLikelihood, sigma_noise
-
-    #generative model
-    GeN = BigGenerator(lat_dim,param_count,device).to(device)
-
-    ## Parametrize noise for learning aleatoric uncertainty
-    
-    _sigma_noise=torch.log(torch.tensor(1.).exp()-1.).clone().to(device).detach().requires_grad_(True)
-    sigma_noise = torch.log(torch.exp(_sigma_noise) + 1.)
-
-    optimizer = torch.optim.Adam(list(GeN.parameters())+[_sigma_noise], lr=learning_rate)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=patience, factor=lr_decay, min_lr=min_lr)
-
-    Run=IVI(train_loader, ELBO, optimizer)
-    
-    start = timeit.default_timer()
-    with trange(n_epochs) as tr:
-        tr.set_description(desc=dataset+'/FuNNeVI-GP', refresh=False)
-        for t in tr:
-            
-            
-            scores=Run.run(GeN,_sigma_noise)
-
-            scheduler.step(scores['ELBO'])
-            tr.set_postfix(ELBO=scores['ELBO'], LogLike=scores['LL'], KL=scores['KL'], lr=scores['lr'], sigma=scores['sigma'])
-
-            if scores['lr'] <= 1e-4:
-                break
-    stop = timeit.default_timer()
-    time = stop - start
-    
-    theta=GeN(1000).detach()
-    sigma_noise = torch.log(torch.exp(_sigma_noise) + 1.).detach().cpu()
-    y_pred=model(x_test,theta)
-    metrics=get_metrics(y_pred, sigma_noise, y_test, std_y_train, 'FuNNeVI-GP', time)
-    return metrics
-
-
-def FuNNeVI(dataset,device, seed):
+def FuNNeVI(dataset,device):
 
     setup_ = get_setup(dataset)
-    setup=setup_.Setup(device, seed=seed) 
+    setup=setup_.Setup(device) 
 
     x_train, y_train=setup.train_data()
     x_test, y_test=setup.test_data()
@@ -554,10 +330,10 @@ def FuNNeVI(dataset,device, seed):
 
     ## Parametrize noise for learning aleatoric uncertainty
     
-    _sigma_noise=torch.log(torch.tensor(1.).exp()-1.).clone().to(device).detach().requires_grad_(True)
+    _sigma_noise=torch.log(torch.tensor(setup.sigma_noise).exp()-1.).clone().to(device).detach().requires_grad_(False)
     sigma_noise = torch.log(torch.exp(_sigma_noise) + 1.)
 
-    optimizer = torch.optim.Adam(list(GeN.parameters())+[_sigma_noise], lr=learning_rate)
+    optimizer = torch.optim.Adam(list(GeN.parameters()), lr=learning_rate)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=patience, factor=lr_decay, min_lr=min_lr)
 
     Run=IVI(train_loader, ELBO, optimizer)
@@ -578,17 +354,19 @@ def FuNNeVI(dataset,device, seed):
     stop = timeit.default_timer()
     time = stop - start
     
+    
+    
     theta=GeN(1000).detach()
     sigma_noise = torch.log(torch.exp(_sigma_noise) + 1.).detach().cpu()
     y_pred=model(x_test,theta)
     metrics=get_metrics(y_pred, sigma_noise, y_test, std_y_train, 'FuNNeVI', time)
-    return metrics
+    return theta, metrics
 
 
-def GeNNeVI(dataset,device, seed):
+def GeNNeVI(dataset,device):
 
     setup_ = get_setup(dataset)
-    setup=setup_.Setup(device, seed=seed) 
+    setup=setup_.Setup(device) 
 
     x_train, y_train=setup.train_data()
     x_test, y_test=setup.test_data()
@@ -632,10 +410,10 @@ def GeNNeVI(dataset,device, seed):
 
     ## Parametrize noise for learning aleatoric uncertainty
     
-    _sigma_noise=torch.log(torch.tensor(1.0).exp()-1.).clone().to(device).detach().requires_grad_(True)
+    _sigma_noise=torch.log(torch.tensor(setup.sigma_noise).exp()-1.).clone().to(device).detach().requires_grad_(False)
     sigma_noise = torch.log(torch.exp(_sigma_noise) + 1.)
 
-    optimizer = torch.optim.Adam(list(GeN.parameters())+[_sigma_noise], lr=learning_rate)
+    optimizer = torch.optim.Adam(GeN.parameters(), lr=learning_rate)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=patience, factor=lr_decay, min_lr=min_lr)
 
     Run=IVI(train_loader, ELBO, optimizer)
@@ -644,7 +422,6 @@ def GeNNeVI(dataset,device, seed):
     with trange(n_epochs) as tr:
         tr.set_description(desc=dataset+'/GeNNeVI', refresh=False)
         for t in tr:
-
             
             scores=Run.run(GeN,_sigma_noise)
 
@@ -657,10 +434,10 @@ def GeNNeVI(dataset,device, seed):
     time = stop - start
     
     theta=GeN(1000).detach()
-    sigma_noise = torch.log(torch.exp(_sigma_noise) + 1.).detach().cpu()
     y_pred=model(x_test,theta)
+    sigma_noise = torch.log(torch.exp(_sigma_noise) + 1.).detach().cpu()
     metrics=get_metrics(y_pred, sigma_noise, y_test, std_y_train, 'GeNNeVI', time)
-    return metrics
+    return theta, metrics
 
 def get_metrics(y_pred, sigma_noise, y_test, std_y_train, method, time, noise=True):
     metrics=evaluate_metrics(y_pred, sigma_noise.view(1,1,1), y_test,  std_y_train, device='cpu', std=False, noise=noise)
@@ -678,14 +455,232 @@ def MeanStd(metric_list, method):
         std[(method,j)] = std.pop(j)
     return mean, std
 
+def FunKL(s, t, model, sampler, n=100):
+    assert t.shape == s.shape
+    KLs = torch.Tensor(n)
+    for i in range(n):
+        rand_input=sampler()
+        t_=model(rand_input,t).squeeze(2)
+        s_=model(rand_input,s).squeeze(2)
+        k=1
+        K= KL(t_, s_, k=k, device=device)     
+        while torch.isinf(K):
+            k+=1
+            K= KL(t_, s_, k=k, device=device)
+        KLs[i]=K
+    return K.mean()  # , K.std()
 
+def FunH(s, model, sampler, n=100):
+    Hs = torch.Tensor(n)
+    for i in range(n):
+        rand_input=sampler()
+        s_=model(rand_input,s).squeeze(2)
+        k=1
+        H= Entropy(s_,k=1,k_MC=200,device=s.device)     
+        while torch.isinf(H):
+            k+=1
+            H= Entropy(s_,k=1,k_MC=200,device=s.device)     
+        Hs[i]=H
+    return H.mean()  # , K.std()
+
+def ComputeEntropy(thetas, dataset, method):
+    setup_ = get_setup(dataset)
+    device=thetas[0].device
+    setup=setup_.Setup(device) 
+
+    entropies={}
+    entropies_std={}
+    x_train, y_train=setup.train_data()
+
+    sampler= lambda :OOD_sampler(x_train=x_train,n_ood=200)
+
+    ## predictive model
+    input_dim=x_train.shape[1]
+    param_count, model = get_mlp(input_dim, layerwidth, nblayers, activation)
+    
+    HMC_=models_HMC[dataset]
+    indices = torch.randperm(len(HMC_))[:1000]
+    HMC=HMC_[indices].to(device)#models_HMC[dataset][:thetas[0].shape[0],:].to(device)     
+    
+    metric=(method,'paramH')
+    print(dataset+': '+'paramH')
+    Hs=[]
+    for theta in thetas:
+        H= Entropy(theta,k=1,k_MC=1,device=theta.device)     
+        print(H.item())
+        Hs.append(H.item())
+    
+    entropies.update({metric:np.mean(Hs)})
+    entropies_std.update({metric:np.std(Hs)})
+    
+    metric=(method,'funH')
+    print(dataset+': '+'funH')
+    Hs=[]
+    for theta in thetas:
+        H= FunH(theta,model,sampler)     
+        print(H.item())
+        Hs.append(H.item())
+
+    entropies.update({metric:np.mean(Hs)})
+    entropies_std.update({metric:np.std(Hs)})
+    
+    return entropies, entropies_std
+
+        
+def paramCompareWithHMC(thetas, dataset, method):
+    divergences={}
+    divergences_std={}
+    setup_ = get_setup(dataset)
+    device=thetas[0].device
+    setup=setup_.Setup(device) 
+
+    x_train, y_train=setup.train_data()
+
+    ## predictive model
+    input_dim=x_train.shape[1]
+    param_count, model = get_mlp(input_dim, layerwidth, nblayers, activation)
+    
+    HMC_=models_HMC[dataset]
+    indices = torch.randperm(len(HMC_))[:1000]
+    HMC=HMC_[indices].to(device)#models_HMC[dataset][:thetas[0].shape[0],:].to(device)        
+
+    
+    metric='KL(-,HMC)'
+    print(dataset+': '+metric)
+    KLs=[]
+    for theta in thetas:
+        K=KL(theta,HMC, k=kNNE,device=device)
+        print(K.item())
+        KLs.append(K.item())
+    
+    divergences.update({metric:np.mean(KLs)})
+    divergences_std.update({metric:np.std(KLs)})
+    
+    metric='KL(HMC,-)'
+    print(dataset+': '+metric)
+    KLs=[]
+    for theta in thetas:
+        K=KL(HMC,theta, k=kNNE,device=device)
+        print(K.item())
+        KLs.append(K.item())
+    
+    divergences.update({metric:np.mean(KLs)})
+    divergences_std.update({metric:np.std(KLs)})
+    
+    metric='KL(-,-)'
+    print(dataset+': '+metric)
+    KLs=[]
+        
+    models_pairs=list(itertools.combinations(thetas,2))
+    KLs=[]
+    for theta_0,theta_1 in models_pairs:
+        K=KL(theta_0,theta_1,k=kNNE,device=device)
+        print(K.item())
+        KLs.append(K.item())    
+   
+    divergences.update({metric:np.mean(KLs)})
+    divergences_std.update({metric:np.std(KLs)})
+        
+    metrics=list(divergences.keys())
+    for j in metrics:
+        divergences[(method,j)] = divergences.pop(j)
+        divergences_std[(method,j)] = divergences_std.pop(j)
+    return divergences, divergences_std
+
+
+def CompareWithHMC(thetas, dataset, method):
+    divergences={}
+    divergences_std={}
+    setup_ = get_setup(dataset)
+    setup=setup_.Setup(thetas[0].device) 
+
+    x_train, y_train=setup.train_data()
+    sampler= lambda :OOD_sampler(x_train=x_train,n_ood=200)
+    ## predictive model
+    input_dim=x_train.shape[1]
+    param_count, model = get_mlp(input_dim, layerwidth, nblayers, activation)
+    
+    HMC_=models_HMC[dataset]
+    indices = torch.randperm(len(HMC_))[:1000]
+    HMC=HMC_[indices].to(thetas[0].device)#models_HMC[dataset][:thetas[0].shape[0],:].to(device)        
+
+    
+    metric='KL(-,HMC)'
+    print(dataset+': '+metric)
+    KLs=[]
+    for theta in thetas:
+        K=FunKL(theta,HMC,model,sampler)
+        print(K.item())
+        KLs.append(K.item())
+    
+    divergences.update({metric:np.mean(KLs)})
+    divergences_std.update({metric:np.std(KLs)})
+    
+    metric='KL(HMC,-)'
+    print(dataset+': '+metric)
+    KLs=[]
+    for theta in thetas:
+        K=FunKL(HMC,theta,model,sampler)
+        print(K.item())
+        KLs.append(K.item())
+    
+    divergences.update({metric:np.mean(KLs)})
+    divergences_std.update({metric:np.std(KLs)})
+    
+    metric='KL(-,-)'
+    print(dataset+': '+metric)
+    KLs=[]
+        
+    models_pairs=list(itertools.combinations(thetas,2))
+    KLs=[]
+    for theta_0,theta_1 in models_pairs:
+        K=FunKL(theta_0,theta_1,model,sampler)
+        print(K.item())
+        KLs.append(K.item())    
+   
+    divergences.update({metric:np.mean(KLs)})
+    divergences_std.update({metric:np.std(KLs)})
+    
+    metrics=list(divergences.keys())
+    for j in metrics:
+        divergences[(method,j)] = divergences.pop(j)
+        divergences_std[(method,j)] = divergences_std.pop(j)
+    return divergences, divergences_std
+
+def HMC_metrics(dataset,device):
+    setup_ = get_setup(dataset)
+    setup=setup_.Setup(device) 
+    
+    x_test, y_test=setup.test_data()
+
+    ## predictive model
+    input_dim=x_test.shape[1]
+    param_count, model = get_mlp(input_dim, layerwidth, nblayers, activation)
+    
+    std_y_train = torch.tensor(1.)
+    if hasattr(setup, '_scaler_y'):
+        std_y_train=torch.tensor(setup._scaler_y.scale_, device=device).squeeze().float()
+    
+    HMC_=models_HMC[dataset]
+    indices = torch.randperm(len(HMC_))[:1000]
+    HMC=HMC_[indices].to(device)
+    sigma_noise=torch.tensor(setup.sigma_noise)
+    y_pred=model(x_test,HMC)
+    
+    metrics=get_metrics(y_pred, sigma_noise, y_test, std_y_train, 'HMC', 0.)
+    metrics_keys=list(metrics.keys())
+    for j in metrics_keys:
+        metrics[('HMC',j)] = metrics.pop(j)
+    return metrics
+    
+#metrics[(method,metric)].update({dataset:(np.mean(KLs).round(decimals=3), np.std(KLs).round(decimals=3))})
 
 if __name__ == "__main__":
     
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
     date_string = datetime.now().strftime("%Y-%m-%d-%H:%M")
-    file_name='Results/NEW/UCI_splits'+date_string
+    file_name='Results/NEW/UCI_HMC'+date_string
     makedirs(file_name)
 
     with open(file_name, 'w') as f:
@@ -699,57 +694,107 @@ if __name__ == "__main__":
 #     ## large
 #     batch_size=500
 #     datasets=['kin8nm','powerplant','navalC','protein']
+    (RESULTS, STDS), (DIV, DIV_std), (pDIV, pDIV_std),(ENT, ENT_std) = torch.load('Results/NEW/UCI_HMC2020-10-11-17:10.pt')
+#     RESULTS, STDS={dataset:{} for dataset in datasets}, {dataset:{} for dataset in datasets}#torch.load('Results/NEW/UCI_splits2020-10-08-13:48.pt')##{dataset:{} for dataset in datasets}, {dataset:{} for dataset in datasets}
+#     DIV, DIV_std={dataset:{} for dataset in datasets}, {dataset:{} for dataset in datasets}
+#     pDIV, pDIV_std={dataset:{} for dataset in datasets}, {dataset:{} for dataset in datasets}
+#     ENT, ENT_std={dataset:{} for dataset in datasets}, {dataset:{} for dataset in datasets}
 
-    RESULTS, STDS=torch.load('Results/NEW/UCI_splits2020-10-08-13:48.pt')#{dataset:{} for dataset in datasets}, {dataset:{} for dataset in datasets}
-
-    SEEDS=[117+i for i in range(10)]
-    
+    repeat=range(3)
     for dataset in datasets:
         print(dataset)     
  
         metrics={}
         stds={}
+        div, div_std= {},{}
+        Pdiv, Pdiv_std= {},{}
+        H, H_std= {},{}
         
-        results=[ensemble_bootstrap(dataset,device, seed) for seed in SEEDS]
-        print(results)
-        mean, std= MeanStd(results, 'EnsembleB')
+#         #MFVI
+#         Thetas, Metrics=[],[]
+#         for _ in repeat:
+#             theta, metric= MFVI(dataset,device)
+#             Thetas.append(theta), Metrics.append(metric)
+#         Pdivergences, Pdivergences_std=paramCompareWithHMC(Thetas, dataset, 'MFVI')
+#         divergences, divergences_std=CompareWithHMC(Thetas, dataset, 'MFVI') 
+
+#         div.update(divergences),div_std.update(divergences_std)
+#         Pdiv.update(Pdivergences), Pdiv_std.update(Pdivergences_std)
+        
+#         mean, std= MeanStd(Metrics, 'MFVI')
+#         metrics.update(mean)
+#         stds.update(std)
+        
+        
+#         #FuNNeMFVI
+#         Thetas, Metrics=[],[]
+#         for _ in repeat:
+#             theta, metric= FuNNeMFVI(dataset,device)
+#             Thetas.append(theta), Metrics.append(metric)
+#         Pdivergences, Pdivergences_std=paramCompareWithHMC(Thetas, dataset, 'FuNNeMFVI')
+#         divergences, divergences_std=CompareWithHMC(Thetas, dataset, 'FuNNeMFVI') 
+
+#         div.update(divergences),div_std.update(divergences_std)
+#         Pdiv.update(Pdivergences), Pdiv_std.update(Pdivergences_std)
+        
+#         mean, std= MeanStd(Metrics, 'FuNNeMFVI')
+#         metrics.update(mean)
+#         stds.update(std)
+        
+        #FuNNeVI
+        Thetas, Metrics=[],[]
+        for _ in repeat:
+            theta, metric= FuNNeVI(dataset,device)
+            Thetas.append(theta), Metrics.append(metric)
+        Pdivergences, Pdivergences_std=paramCompareWithHMC(Thetas, dataset, 'FuNNeVI')
+        divergences, divergences_std=CompareWithHMC(Thetas, dataset, 'FuNNeVI') 
+        entropies, entropies_std= ComputeEntropy(Thetas, dataset,'FuNNeVI')
+        
+        div.update(divergences),div_std.update(divergences_std)
+        Pdiv.update(Pdivergences), Pdiv_std.update(Pdivergences_std)
+        H.update(entropies), H_std.update(entropies_std)
+        
+        mean, std= MeanStd(Metrics, 'FuNNeVI')
+        metrics.update(mean)
+        stds.update(std)
+
+        
+        #GeNNeVI
+        Thetas, Metrics=[],[]
+        for _ in repeat:
+            theta, metric= GeNNeVI(dataset,device)
+            Thetas.append(theta), Metrics.append(metric)
+        Pdivergences, Pdivergences_std=paramCompareWithHMC(Thetas, dataset, 'GeNNeVI')
+        divergences, divergences_std=CompareWithHMC(Thetas, dataset, 'GeNNeVI')
+        entropies, entropies_std= ComputeEntropy(Thetas, dataset,'GeNNeVI')
+
+        div.update(divergences),div_std.update(divergences_std)
+        Pdiv.update(Pdivergences), Pdiv_std.update(Pdivergences_std)
+        H.update(entropies), H_std.update(entropies_std)
+
+      
+        mean, std= MeanStd(Metrics, 'GeNNeVI')
         metrics.update(mean)
         stds.update(std)
         
-        print(metrics)
-#         results=[Mc_dropout(dataset,device, seed) for seed in SEEDS]
-#         mean, std= MeanStd(results, 'McDropOut')
-#         metrics.update(mean)
-#         stds.update(std)
+  
         
-#         results=[FuNNeMFVI(dataset,device, seed) for seed in SEEDS]
-#         mean, std= MeanStd(results, 'FuNNeMFVI')
-#         metrics.update(mean)
-#         stds.update(std)
+        #HMC
+        metrics_HMC=HMC_metrics(dataset,device)
+        metrics.update(metrics_HMC)
+        HMC_=models_HMC[dataset]
+        indices = torch.randperm(len(HMC_))[:1000]
+        HMC=HMC_[indices].to(device)
+        entropies, entropies_std= ComputeEntropy([HMC], dataset,'HMC')
+        H.update(entropies), H_std.update(entropies_std)
         
         
-#         results=[MFVI(dataset,device, seed) for seed in SEEDS]
-#         mean, std= MeanStd(results, 'MFVI')
-#         metrics.update(mean)
-#         stds.update(std)
-                       
-#         results=[GeNNeVI(dataset,device, seed) for seed in SEEDS]
-#         mean, std= MeanStd(results, 'GeNNeVI')
-#         metrics.update(mean)
-#         stds.update(std)
         
-#         results=[FuNNeVI(dataset,device, seed) for seed in SEEDS]
-#         mean, std= MeanStd(results, 'FuNNeVI')
-#         metrics.update(mean)
-#         stds.update(std)
+        RESULTS[dataset].update(metrics), STDS[dataset].update(stds)
+        DIV[dataset].update(div), DIV_std[dataset].update(div_std)
+        pDIV[dataset].update(Pdiv),pDIV_std[dataset].update(Pdiv_std)
+        ENT[dataset].update(H),ENT_std[dataset].update(H_std)
+
+ #       print(DIV,DIV_std)
+        torch.save([(RESULTS,STDS),(DIV,DIV_std),(pDIV,pDIV_std), (ENT,ENT_std)],file_name+'.pt')
         
-#         results=[FuNNeVI_GPprior(dataset,device, seed) for seed in SEEDS]
-#         mean, std= MeanStd(results, 'FuNNeVI-GP')
-#         metrics.update(mean)
-#         stds.update(std)
-        
-            
-        RESULTS[dataset].update(metrics)
-        STDS[dataset].update(stds)
-        
-        torch.save((RESULTS,STDS),file_name+'.pt')

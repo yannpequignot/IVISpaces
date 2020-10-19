@@ -381,7 +381,7 @@ if __name__ == "__main__":
 #        metrics.update(FuNNeVI_noise(dataset,device))
             
         RESULTS[dataset].update(metrics)
-        #print(RESULTS)
+        #print( )
         torch.save(RESULTS,'Results/NEW/UCI'+date_string+'.pt')
         #RESULTS.append(GeNNeVI_noise(dataset,device))
         #torch.save(RESULTS,'Results/NEW/GeNoise'+date_string+'.pt')
