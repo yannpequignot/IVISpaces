@@ -32,6 +32,7 @@ def switch_setup(setup):
 
     }[setup]
 
+
 def get_setup(setup):
     spec=switch_setup(setup)
     setup = importlib.util.module_from_spec(spec)

@@ -39,7 +39,7 @@ class MC_Dropout_Layer(nn.Module):
 
 
 class MC_Dropout_Model(nn.Module):
-    def __init__(self, input_dim, output_dim, no_units, init_log_noise, drop_prob):
+    def __init__(self, input_dim, output_dim, no_units, init_log_noise, drop_prob, learn_noise, activation):
         super(MC_Dropout_Model, self).__init__()
 
         self.drop_prob=drop_prob
@@ -50,8 +50,8 @@ class MC_Dropout_Model(nn.Module):
         self.layer2 = nn.Linear(no_units, output_dim)
 
         # activation to be used between hidden layers
-        self.activation = nn.ReLU(inplace = True)
-        self.log_noise = nn.Parameter(torch.Tensor([init_log_noise]))
+        self.activation = activation#nn.ReLU(inplace = True)
+        self.log_noise = nn.Parameter(torch.Tensor([init_log_noise]),requires_grad=learn_noise)
 
 
     def forward(self, x):
@@ -69,32 +69,35 @@ class MC_Dropout_Model(nn.Module):
 
 
 class MC_Dropout_Wrapper:
-    def __init__(self, input_dim, output_dim, no_units, learn_rate, batch_size, no_batches, weight_decay, init_log_noise, drop_prob, device):
+    def __init__(self, input_dim, output_dim, no_units, learn_rate, train_loader, weight_decay, init_log_noise, drop_prob, device, learn_noise=True, activation=nn.ReLU(inplace = True)):
 
         self.learn_rate = learn_rate
-        self.batch_size = batch_size
-        self.no_batches = no_batches
+        self.train_loader = train_loader
 
-        self.network = MC_Dropout_Model(input_dim = input_dim, output_dim = output_dim,
-                                    no_units = no_units, init_log_noise = init_log_noise, drop_prob = drop_prob)
+        self.network = MC_Dropout_Model(input_dim = input_dim, output_dim = output_dim, \
+                                        no_units = no_units, init_log_noise = init_log_noise, drop_prob = drop_prob,learn_noise=learn_noise, activation=activation)
         self.network.to(device)
 
         self.optimizer = torch.optim.Adam(self.network.parameters(), lr=learn_rate, weight_decay=weight_decay)
         self.loss_func = log_gaussian_loss
 
-    def fit(self, x, y):
+    def fit(self):
         #x, y = to_variable(var=(x, y), cuda=True)
-
+        
+        epoch_loss=0.
+        train_samples=0
+        for x,y in self.train_loader:
         # reset gradient and total loss
-        self.optimizer.zero_grad()
+            self.optimizer.zero_grad()
 
-        output = self.network(x)
-        loss = self.loss_func(output, y, torch.exp(self.network.log_noise), 1)/len(x)
+            output = self.network(x)
+            loss = self.loss_func(output, y, torch.exp(self.network.log_noise), 1)
 
-        loss.backward()
-        self.optimizer.step()
-
-        return loss
+            loss.backward()
+            self.optimizer.step()
+            epoch_loss+=loss.item()
+            train_samples+=len(x)
+        return epoch_loss/train_samples
 
     def get_loss_and_rmse(self, x, y, num_samples):
        # x, y = to_variable(var=(x, y), cuda=True)

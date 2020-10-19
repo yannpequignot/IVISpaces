@@ -225,7 +225,7 @@ class BigGenerator(nn.Module):
         
         def block(in_feat, out_feat):
             layers = [nn.Linear(in_feat, out_feat)]
-            layers.append(nn.ReLU(inplace=True))#nn.LeakyReLU(inplace=True))
+            layers.append(nn.ReLU(inplace=True)) #changed from inplace=True on October 8 2020 !!!! #nn.LeakyReLU(inplace=True))
             return layers
         
         self.model = nn.Sequential(
@@ -234,19 +234,6 @@ class BigGenerator(nn.Module):
             nn.Linear(8*lat_dim, output_dim)
         )
       
-        
-    def _save_best_model(self, score,epoch,ED,LP):
-        if score < self._best_score:
-            torch.save({
-                'epoch': epoch,
-                'state_dict': self.state_dict(),
-            }, 'best.pt')
-            self._best_score=score
-
-    def _get_best_model(self):
-        best= torch.load('best.pt')
-        self.load_state_dict(best['state_dict'])
-        return best['epoch'], best['ELBO']
 
     def forward(self, n=1):
         epsilon = torch.randn(size=(n,self.lat_dim), device=self.device)

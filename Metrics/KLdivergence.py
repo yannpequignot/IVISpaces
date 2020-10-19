@@ -123,3 +123,27 @@ def Entropy(theta,k=1,k_MC=1,device='cpu'):
     pi=torch.as_tensor(math.pi, device=device)
     lcd = d/2.*pi.log() - torch.lgamma(1. + d/2.0)#-d/2*K_MC.log()
     return torch.log(N) - torch.digamma(K) + lcd + d/nb_samples*a.div(torch.sqrt(kMC)).log().sum(-1)
+
+def BatchEntropy(theta,k=1,k_MC=1,device='cpu'):
+    """
+    Parameters:
+        theta (Tensor): Samples, Batch x NbExemples X NbDimensions
+        k (Int): ordinal number
+
+    Returns:
+        Tensor: H of size Batch x 1, k-Nearest Neighbour Estimation of the entropy of theta, H[b]=H(theta[b]).
+
+    """
+    batch=theta.shape[0]
+    nb_samples=theta.shape[1]
+    d=torch.tensor(theta.shape[-1]).float()
+    D=torch.cdist(theta,theta)
+    a = torch.topk(D, k=k+1, dim=1, largest=False, sorted=True)[0][:,k]
+    a= a.clamp(torch.finfo().eps,float('inf')).to(device).log().sum(1)
+    K=torch.as_tensor(float(k), device=device)
+    K_MC=torch.as_tensor(float(k_MC), device=device)
+    N=torch.as_tensor(float(nb_samples), device=device)
+    pi=torch.as_tensor(math.pi, device=device)
+    lcd = d/2.*pi.log() - torch.lgamma(1. + d/2.0)-d/2*K_MC.log()
+    H=torch.log(N) - torch.digamma(K) + lcd + d/nb_samples*a
+    return H

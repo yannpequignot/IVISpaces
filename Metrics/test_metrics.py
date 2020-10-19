@@ -129,7 +129,7 @@ def MPIW(y_pred, device, scale):
     width = scale * (y_high - y_low)
     return width.mean().item()
 
-def evaluate_metrics(y_pred,sigma_noise, y_test, std_y_train, device='cpu', std=True):
+def evaluate_metrics(y_pred,sigma_noise, y_test, std_y_train, device='cpu', std=True, noise=True):
     r"""
 
     Args:
@@ -149,7 +149,11 @@ def evaluate_metrics(y_pred,sigma_noise, y_test, std_y_train, device='cpu', std=
     std_y_train=std_y_train.to(device)
     metrics={}
     
-    LPP_test = LPP(y_pred, y_test, sigma_noise, device, std_y_train)
+    if noise:
+        LPP_test = LPP(y_pred, y_test, sigma_noise, device, std_y_train)
+    else:
+        LPP_test = LPP_Gaussian(y_pred, y_test, sigma_noise, std_y_train)
+
     
     gLPP_test=LPP_Gaussian(y_pred, y_test, sigma_noise, std_y_train)
     
@@ -167,8 +171,10 @@ def evaluate_metrics(y_pred,sigma_noise, y_test, std_y_train, device='cpu', std=
         metrics.update({'LPP':LPP_test[0]}) 
         metrics.update({'gLPP':gLPP_test[0]})
 
-    
-    WAIC_test=WAIC(y_pred, sigma_noise, y_test,  device, std_y_train)
+    if noise:
+        WAIC_test=WAIC(y_pred, sigma_noise, y_test,  device, std_y_train)
+    else:
+        WAIC_test=None
     metrics.update({'WAIC':WAIC_test})
     
     y_pred=y_pred+(sigma_noise*torch.randn_like(y_pred))
