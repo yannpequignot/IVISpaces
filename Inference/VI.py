@@ -5,7 +5,7 @@ from torch.utils.data import Dataset
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from Models import get_mlp, BigGenerator, MeanFieldVariationalDistribution
-from Metrics import KL
+from Metrics import kl_nne
 from Tools import average_normal_loglikelihood, log_diagonal_mvn_pdf
 from Inference.VI_trainer import IVI
 
@@ -50,7 +50,7 @@ def NN_HyVI(x_train, y_train, batch_size, layerwidth, nblayers, activation, n_ep
     def kl(gen):
         theta = gen(n_samples_KL)  # variational
         theta_prior = prior(n_samples_KL)  # prior
-        K = KL(theta, theta_prior, k=kNNE)
+        K = kl_nne(theta, theta_prior, k=kNNE)
         return K
 
     def ELBO(x_data, y_data, gen, _sigma_noise):
@@ -120,7 +120,7 @@ def FuNN_HyVI(x_train, y_train, batch_size, layerwidth, nblayers, activation, in
         X = input_sampler()  # sample OOD inputs
         theta_proj = model(X, theta).squeeze(2)  # evaluate predictors at OOD inputs
         theta_prior_proj = model(X, theta_prior).squeeze(2)  # evaluate predictors at OOD inputs
-        K = KL(theta_proj, theta_prior_proj, k=kNNE)  # compute NNe of KL on predictor approximations
+        K = kl_nne(theta_proj, theta_prior_proj, k=kNNE)  # compute NNe of KL on predictor approximations
         return K
 
     def ELBO(x_data, y_data, gen, _sigma_noise):
@@ -249,7 +249,7 @@ def FuNN_MFVI(x_train, y_train, batch_size, layerwidth, nblayers, activation, in
         X = input_sampler()  # sample OOD inputs
         theta_proj = model(X, theta).squeeze(2)  # evaluate predictors at OOD inputs
         theta_prior_proj = model(X, theta_prior).squeeze(2)  # evaluate predictors at OOD inputs
-        K = KL(theta_proj, theta_prior_proj, k=kNNE)  # compute NNe of KL on predictor approximations
+        K = kl_nne(theta_proj, theta_prior_proj, k=kNNE)  # compute NNe of KL on predictor approximations
         return K
 
     def ELBO(x_data, y_data, var_dist, _sigma_noise):

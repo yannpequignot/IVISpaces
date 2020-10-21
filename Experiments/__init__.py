@@ -52,10 +52,10 @@ class AbstractRegressionSetup(ABC):
         
 
     def _normalize_data(self):        
-        self._scaler_X, self._scaler_y = fitStandardScalerNormalization(self._X_train, self._y_train)
-        self._X_train, self._y_train = normalize(self._X_train, self._y_train, self._scaler_X, self._scaler_y)
+        self._scaler_X, self.scaler_y = fitStandardScalerNormalization(self._X_train, self._y_train)
+        self._X_train, self._y_train = normalize(self._X_train, self._y_train, self._scaler_X, self.scaler_y)
         #self._X_validation, self._y_validation = normalize(self._X_validation, self._y_validation, self._scaler_X, self._scaler_y)
-        self._X_test, self._y_test = normalize(self._X_test, self._y_test, self._scaler_X, self._scaler_y)
+        self._X_test, self._y_test = normalize(self._X_test, self._y_test, self._scaler_X, self.scaler_y)
 
     def _flip_data_to_torch(self):
         self._X = torch.tensor(self._X, device=self.device).float()

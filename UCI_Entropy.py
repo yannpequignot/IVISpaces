@@ -11,7 +11,7 @@ from torch.utils.data import Dataset
 
 from Models import get_mlp, BigGenerator, MeanFieldVariationalDistribution, GaussianProcess, MC_Dropout_Wrapper
 from Tools import average_normal_loglikelihood, log_diagonal_mvn_pdf
-from Metrics import KL, evaluate_metrics, entropy_nne, batch_entropy_nne
+from Metrics import kl_nne, evaluate_metrics, entropy_nne, batch_entropy_nne
 
 from Experiments import get_setup
 
@@ -78,7 +78,7 @@ def ensemble_bootstrap(dataset,device,seed):
      
     std_y_train = torch.tensor(1.)
     if hasattr(setup, '_scaler_y'):
-        std_y_train=torch.tensor(setup._scaler_y.scale_, device=device).squeeze().float()
+        std_y_train=torch.tensor(setup.scaler_y.scale_, device=device).squeeze().float()
 
     N = x_train.shape[0]
     input_dim=x_train.shape[1]
@@ -171,7 +171,7 @@ def Mc_dropout(dataset,device,seed):
     
     std_y_train = torch.tensor(1.)
     if hasattr(setup, '_scaler_y'):
-        std_y_train=torch.tensor(setup._scaler_y.scale_, device=device).squeeze().float()
+        std_y_train=torch.tensor(setup.scaler_y.scale_, device=device).squeeze().float()
 
     
         
@@ -233,7 +233,7 @@ def MFVI(dataset,device, seed):
 
     std_y_train = torch.tensor(1.)
     if hasattr(setup, '_scaler_y'):
-        std_y_train=torch.tensor(setup._scaler_y.scale_, device=device).squeeze().float()
+        std_y_train=torch.tensor(setup.scaler_y.scale_, device=device).squeeze().float()
 
     train_dataset = torch.utils.data.TensorDataset(x_train, y_train)
     size_data=len(train_dataset)
@@ -296,7 +296,7 @@ def FuNNeMFVI(dataset,device, seed):
 
     std_y_train = torch.tensor(1.)
     if hasattr(setup, '_scaler_y'):
-        std_y_train=torch.tensor(setup._scaler_y.scale_, device=device).squeeze().float()
+        std_y_train=torch.tensor(setup.scaler_y.scale_, device=device).squeeze().float()
 
     train_dataset = torch.utils.data.TensorDataset(x_train, y_train)
     size_data=len(train_dataset)
@@ -352,7 +352,7 @@ def FuNNeMFVI(dataset,device, seed):
 
         theta_proj, theta_prior_proj = projection(theta, theta_prior,x_data)
 
-        K= KL(theta_proj, theta_prior_proj, k=kNNE)
+        K= kl_nne(theta_proj, theta_prior_proj, k=kNNE)
         return K
     
     
@@ -414,7 +414,7 @@ def FuNNeVI(dataset,device, seed):
 
     std_y_train = torch.tensor(1.)
     if hasattr(setup, '_scaler_y'):
-        std_y_train=torch.tensor(setup._scaler_y.scale_, device=device).squeeze().float()
+        std_y_train=torch.tensor(setup.scaler_y.scale_, device=device).squeeze().float()
 
     train_dataset = torch.utils.data.TensorDataset(x_train, y_train)
     size_data=len(train_dataset)
@@ -470,7 +470,7 @@ def FuNNeVI(dataset,device, seed):
 
         theta_proj, theta_prior_proj = projection(theta, theta_prior,x_data)
 
-        K= KL(theta_proj, theta_prior_proj, k=kNNE)
+        K= kl_nne(theta_proj, theta_prior_proj, k=kNNE)
         return K
     
     
@@ -532,7 +532,7 @@ def GeNNeVI(dataset,device, seed):
 
     std_y_train = torch.tensor(1.)
     if hasattr(setup, '_scaler_y'):
-        std_y_train=torch.tensor(setup._scaler_y.scale_, device=device).squeeze().float()
+        std_y_train=torch.tensor(setup.scaler_y.scale_, device=device).squeeze().float()
     
     train_dataset = torch.utils.data.TensorDataset(x_train, y_train)
     size_data=len(train_dataset)
@@ -552,7 +552,7 @@ def GeNNeVI(dataset,device, seed):
         theta=GeN(n_samples_KL) #variationnel
         theta_prior=prior(n_samples_KL) #prior
 
-        K= KL(theta, theta_prior, k=kNNE)
+        K= kl_nne(theta, theta_prior, k=kNNE)
         return K
     
     def ELBO(x_data, y_data, GeN, _sigma_noise):

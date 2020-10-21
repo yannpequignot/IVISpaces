@@ -11,7 +11,7 @@ from torch.utils.data import Dataset
 
 from Models import get_mlp, BigGenerator, MeanFieldVariationalDistribution, GaussianProcess, MC_Dropout_Wrapper
 from Tools import average_normal_loglikelihood, log_diagonal_mvn_pdf
-from Metrics import KL, evaluate_metrics, entropy_nne
+from Metrics import kl_nne, evaluate_metrics, entropy_nne
 
 from Experiments import get_setup
 
@@ -80,7 +80,7 @@ def MFVI(dataset,device):
 
     std_y_train = torch.tensor(1.)
     if hasattr(setup, '_scaler_y'):
-        std_y_train=torch.tensor(setup._scaler_y.scale_, device=device).squeeze().float()
+        std_y_train=torch.tensor(setup.scaler_y.scale_, device=device).squeeze().float()
 
     train_dataset = torch.utils.data.TensorDataset(x_train, y_train)
     size_data=len(train_dataset)
@@ -139,7 +139,7 @@ def FuNNeMFVI(dataset,device):
 
     std_y_train = torch.tensor(1.)
     if hasattr(setup, '_scaler_y'):
-        std_y_train=torch.tensor(setup._scaler_y.scale_, device=device).squeeze().float()
+        std_y_train=torch.tensor(setup.scaler_y.scale_, device=device).squeeze().float()
 
     train_dataset = torch.utils.data.TensorDataset(x_train, y_train)
     size_data=len(train_dataset)
@@ -195,7 +195,7 @@ def FuNNeMFVI(dataset,device):
 
         theta_proj, theta_prior_proj = projection(theta, theta_prior,x_data)
 
-        K= KL(theta_proj, theta_prior_proj, k=kNNE)
+        K= kl_nne(theta_proj, theta_prior_proj, k=kNNE)
         return K
     
     
@@ -255,7 +255,7 @@ def FuNNeVI(dataset,device):
 
     std_y_train = torch.tensor(1.)
     if hasattr(setup, '_scaler_y'):
-        std_y_train=torch.tensor(setup._scaler_y.scale_, device=device).squeeze().float()
+        std_y_train=torch.tensor(setup.scaler_y.scale_, device=device).squeeze().float()
 
     train_dataset = torch.utils.data.TensorDataset(x_train, y_train)
     size_data=len(train_dataset)
@@ -311,7 +311,7 @@ def FuNNeVI(dataset,device):
 
         theta_proj, theta_prior_proj = projection(theta, theta_prior,x_data)
 
-        K= KL(theta_proj, theta_prior_proj, k=kNNE)
+        K= kl_nne(theta_proj, theta_prior_proj, k=kNNE)
         return K
     
     
@@ -373,7 +373,7 @@ def GeNNeVI(dataset,device):
 
     std_y_train = torch.tensor(1.)
     if hasattr(setup, '_scaler_y'):
-        std_y_train=torch.tensor(setup._scaler_y.scale_, device=device).squeeze().float()
+        std_y_train=torch.tensor(setup.scaler_y.scale_, device=device).squeeze().float()
     
     train_dataset = torch.utils.data.TensorDataset(x_train, y_train)
     size_data=len(train_dataset)
@@ -393,7 +393,7 @@ def GeNNeVI(dataset,device):
         theta=GeN(n_samples_KL) #variationnel
         theta_prior=prior(n_samples_KL) #prior
 
-        K= KL(theta, theta_prior, k=kNNE)
+        K= kl_nne(theta, theta_prior, k=kNNE)
         return K
     
     def ELBO(x_data, y_data, GeN, _sigma_noise):
@@ -463,12 +463,12 @@ def FunKL(s, t, model, sampler, n=100):
         t_=model(rand_input,t).squeeze(2)
         s_=model(rand_input,s).squeeze(2)
         k=1
-        K= KL(t_, s_, k=k)
+        K= kl_nne(t_, s_, k=k)
         while torch.isinf(K):
             k+=1
-            K= KL(t_, s_, k=k)
+            K= kl_nne(t_, s_, k=k)
         KLs[i]=K
-    return K.mean()  # , K.std()
+    return K.mean()
 
 def FunH(s, model, sampler, n=100):
     Hs = torch.Tensor(n)
@@ -481,7 +481,7 @@ def FunH(s, model, sampler, n=100):
             k+=1
             H= entropy_nne(s_, k=1, k_MC=200)
         Hs[i]=H
-    return H.mean()  # , K.std()
+    return H.mean()
 
 def ComputeEntropy(thetas, dataset, method):
     setup_ = get_setup(dataset)
@@ -549,7 +549,7 @@ def paramCompareWithHMC(thetas, dataset, method):
     print(dataset+': '+metric)
     KLs=[]
     for theta in thetas:
-        K= KL(theta, HMC, k=kNNE)
+        K= kl_nne(theta, HMC, k=kNNE)
         print(K.item())
         KLs.append(K.item())
     
@@ -560,7 +560,7 @@ def paramCompareWithHMC(thetas, dataset, method):
     print(dataset+': '+metric)
     KLs=[]
     for theta in thetas:
-        K= KL(HMC, theta, k=kNNE)
+        K= kl_nne(HMC, theta, k=kNNE)
         print(K.item())
         KLs.append(K.item())
     
@@ -574,7 +574,7 @@ def paramCompareWithHMC(thetas, dataset, method):
     models_pairs=list(itertools.combinations(thetas,2))
     KLs=[]
     for theta_0,theta_1 in models_pairs:
-        K= KL(theta_0, theta_1, k=kNNE)
+        K= kl_nne(theta_0, theta_1, k=kNNE)
         print(K.item())
         KLs.append(K.item())    
    
@@ -629,8 +629,7 @@ def CompareWithHMC(thetas, dataset, method):
     
     metric='KL(-,-)'
     print(dataset+': '+metric)
-    KLs=[]
-        
+
     models_pairs=list(itertools.combinations(thetas,2))
     KLs=[]
     for theta_0,theta_1 in models_pairs:
@@ -659,7 +658,7 @@ def HMC_metrics(dataset,device):
     
     std_y_train = torch.tensor(1.)
     if hasattr(setup, '_scaler_y'):
-        std_y_train=torch.tensor(setup._scaler_y.scale_, device=device).squeeze().float()
+        std_y_train=torch.tensor(setup.scaler_y.scale_, device=device).squeeze().float()
     
     HMC_=models_HMC[dataset]
     indices = torch.randperm(len(HMC_))[:1000]
