@@ -171,13 +171,13 @@ def run_FuNN_HyVI(dataset, device, seed):
 
 def get_metrics(y_pred, sigma_noise, y_test, std_y_train, time, gaussian_prediction=False):
     metrics = {}
-    rmse_test, _ = rmse(y_pred.mean(dim=0), y_test, std_y_train)
+    rmse_test, _ = rmse(y_pred.mean(dim=0).cpu(), y_test.cpu(), std_y_train.cpu())
     metrics.update({'RMSE': rmse_test})
 
     if gaussian_prediction:
-        lpp_test, _ = lpp_gaussian(y_pred, y_test, sigma_noise, std_y_train)
+        lpp_test, _ = lpp_gaussian(y_pred.cpu(), y_test.cpu(), sigma_noise.cpu(), std_y_train.cpu())
     else:
-        lpp_test, _ = lpp(y_pred, y_test, sigma_noise.view(1, 1, 1), std_y_train)
+        lpp_test, _ = lpp(y_pred.cpu(), y_test.cpu(), sigma_noise.view(1, 1, 1).cpu(), std_y_train.cpu())
 
     metrics.update({'LPP': lpp_test})
     metrics.update({'time [s]': time})
@@ -208,15 +208,15 @@ if __name__ == "__main__":
         script = open(__file__)
         f.write(script.read())
 
-    n_epochs = 1  # 2000
-    num_epochs_ensemble = 1  # 3000
+    n_epochs = 2000
+    num_epochs_ensemble = 3000
     ## small ##
     batch_size = 50
     # predictive model architecture
     layerwidth = 50
     nblayers = 1
     activation = nn.ReLU()
-    datasets = ['boston', 'concrete']  # ['boston', 'concrete', 'energy', 'wine', 'yacht']
+    datasets = ['boston', 'concrete', 'energy', 'wine', 'yacht']
 
     ## large ##
     # batch_size = 500
@@ -228,7 +228,7 @@ if __name__ == "__main__":
     RESULTS, STDS = {dataset: {} for dataset in datasets}, {dataset: {} for dataset in datasets}
     PRED_H = {dataset: {} for dataset in datasets}
 
-    SEEDS = [117 + i for i in range(1)]
+    SEEDS = [117 + i for i in range(10)]
 
     for dataset in datasets:
         print(dataset)
