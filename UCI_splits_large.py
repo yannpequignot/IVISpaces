@@ -10,12 +10,12 @@ from datetime import datetime
 from torch.utils.data import Dataset
 
 from Models import get_mlp, BigGenerator, MeanFieldVariationalDistribution, GaussianProcess, MC_Dropout_Wrapper
-from Tools import AverageNormalLogLikelihood, logmvn01pdf
-from Metrics import KL, evaluate_metrics, Entropy
+from Tools import average_normal_loglikelihood, log_diagonal_mvn_pdf
+from Metrics import KL, evaluate_metrics, entropy_nne
 
 from Experiments import get_setup
 
-from Inference.IVI_noise import IVI
+from Inference.VI_trainer import IVI
 
 from tqdm import trange
 
@@ -234,9 +234,9 @@ def MFVI(dataset,device, seed):
         y_pred=model(x_data,MFVI(n_samples_LL))
         sigma_noise = torch.log(torch.exp(_sigma_noise) + 1.)
 
-        Average_LogLikelihood=AverageNormalLogLikelihood(y_pred, y_data, sigma_noise)
+        Average_LogLikelihood=average_normal_loglikelihood(y_pred, y_data, sigma_noise)
         theta=MFVI(n_samples_KL)
-        the_KL=MFVI.log_prob(theta).mean()-logmvn01pdf(theta,sigma_prior).mean()
+        the_KL= MFVI.log_prob(theta).mean() - log_diagonal_mvn_pdf(theta, sigma_prior).mean()
         the_ELBO= - Average_LogLikelihood+ (len(x_data)/size_data)* the_KL
         return the_ELBO, the_KL, Average_LogLikelihood, sigma_noise
     
@@ -248,7 +248,7 @@ def MFVI(dataset,device, seed):
     with trange(n_epochs) as tr:
         tr.set_description(desc=dataset+'/MFVI', refresh=False)
         for t in tr:
-            scores=Run.run(MFVI,_sigma_noise)
+            scores=Run.one_epoch(MFVI, _sigma_noise)
 
             scheduler.step(scores['ELBO'])
             tr.set_postfix(ELBO=scores['ELBO'], LogLike=scores['LL'], KL=scores['KL'], lr=scores['lr'], sigma=scores['sigma'])
@@ -330,7 +330,7 @@ def FuNNeMFVI(dataset,device, seed):
 
         theta_proj, theta_prior_proj = projection(theta, theta_prior,x_data)
 
-        K=KL(theta_proj, theta_prior_proj,k=kNNE,device=device)
+        K= KL(theta_proj, theta_prior_proj, k=kNNE)
         return K
     
     
@@ -339,7 +339,7 @@ def FuNNeMFVI(dataset,device, seed):
         y_pred=model(x_data,GeN(n_samples_LL))
         sigma_noise = torch.log(torch.exp(_sigma_noise) + 1.)
 
-        Average_LogLikelihood=AverageNormalLogLikelihood(y_pred, y_data, sigma_noise)
+        Average_LogLikelihood=average_normal_loglikelihood(y_pred, y_data, sigma_noise)
         the_KL=kl(x_data, GeN)
         the_ELBO= - Average_LogLikelihood+ (len(x_data)/size_data)* the_KL
         return the_ELBO, the_KL, Average_LogLikelihood, sigma_noise
@@ -363,7 +363,7 @@ def FuNNeMFVI(dataset,device, seed):
         for t in tr:
             
             
-            scores=Run.run(MFVI,_sigma_noise)
+            scores=Run.one_epoch(MFVI, _sigma_noise)
 
             scheduler.step(scores['ELBO'])
             tr.set_postfix(ELBO=scores['ELBO'], LogLike=scores['LL'], KL=scores['KL'], lr=scores['lr'], sigma=scores['sigma'])
@@ -420,7 +420,7 @@ def FuNNeVI_GPprior(dataset,device, seed):
     def kl(x_data,theta):
         X_ood=input_sampler(x_data)
         f_theta=model(X_ood, theta).squeeze(2)
-        H=Entropy(f_theta,k_MC=X_ood.shape[0])
+        H= entropy_nne(f_theta, k_MC=X_ood.shape[0])
         logtarget=prior.log_prob(X_ood,f_theta)
         return -H-logtarget.mean()   
     
@@ -428,7 +428,7 @@ def FuNNeVI_GPprior(dataset,device, seed):
         y_pred=model(x_data,GeN(n_samples_LL))
         sigma_noise = torch.log(torch.exp(_sigma_noise) + 1.)
 
-        Average_LogLikelihood=AverageNormalLogLikelihood(y_pred, y_data, sigma_noise)
+        Average_LogLikelihood=average_normal_loglikelihood(y_pred, y_data, sigma_noise)
         the_KL=kl(x_data, GeN(n_samples_KL))
         the_ELBO= - Average_LogLikelihood+ (len(x_data)/size_data)* the_KL
         return the_ELBO, the_KL, Average_LogLikelihood, sigma_noise
@@ -452,7 +452,7 @@ def FuNNeVI_GPprior(dataset,device, seed):
         for t in tr:
             
             
-            scores=Run.run(GeN,_sigma_noise)
+            scores=Run.one_epoch(GeN, _sigma_noise)
 
             scheduler.step(scores['ELBO'])
             tr.set_postfix(ELBO=scores['ELBO'], LogLike=scores['LL'], KL=scores['KL'], lr=scores['lr'], sigma=scores['sigma'])
@@ -535,7 +535,7 @@ def FuNNeVI(dataset,device, seed):
 
         theta_proj, theta_prior_proj = projection(theta, theta_prior,x_data)
 
-        K=KL(theta_proj, theta_prior_proj,k=kNNE,device=device)
+        K= KL(theta_proj, theta_prior_proj, k=kNNE)
         return K
     
     
@@ -544,7 +544,7 @@ def FuNNeVI(dataset,device, seed):
         y_pred=model(x_data,GeN(n_samples_LL))
         sigma_noise = torch.log(torch.exp(_sigma_noise) + 1.)
 
-        Average_LogLikelihood=AverageNormalLogLikelihood(y_pred, y_data, sigma_noise)
+        Average_LogLikelihood=average_normal_loglikelihood(y_pred, y_data, sigma_noise)
         the_KL=kl(x_data, GeN)
         the_ELBO= - Average_LogLikelihood+ (len(x_data)/size_data)* the_KL
         return the_ELBO, the_KL, Average_LogLikelihood, sigma_noise
@@ -568,7 +568,7 @@ def FuNNeVI(dataset,device, seed):
         for t in tr:
             
             
-            scores=Run.run(GeN,_sigma_noise)
+            scores=Run.one_epoch(GeN, _sigma_noise)
 
             scheduler.step(scores['ELBO'])
             tr.set_postfix(ELBO=scores['ELBO'], LogLike=scores['LL'], KL=scores['KL'], lr=scores['lr'], sigma=scores['sigma'])
@@ -615,14 +615,14 @@ def GeNNeVI(dataset,device, seed):
         theta=GeN(n_samples_KL) #variationnel
         theta_prior=prior(n_samples_KL) #prior
 
-        K=KL(theta, theta_prior,k=kNNE,device=device)
+        K= KL(theta, theta_prior, k=kNNE)
         return K
     
     def ELBO(x_data, y_data, GeN, _sigma_noise):
         y_pred=model(x_data,GeN(n_samples_LL))
         sigma_noise = torch.log(torch.exp(_sigma_noise) + 1.)
 
-        Average_LogLikelihood=AverageNormalLogLikelihood(y_pred, y_data, sigma_noise)
+        Average_LogLikelihood=average_normal_loglikelihood(y_pred, y_data, sigma_noise)
         the_KL=kl(x_data, GeN)
         the_ELBO= - Average_LogLikelihood+ (len(x_data)/size_data)* the_KL#(len(x_data)/size_data)*the_KL
         return the_ELBO, the_KL, Average_LogLikelihood, sigma_noise
@@ -646,7 +646,7 @@ def GeNNeVI(dataset,device, seed):
         for t in tr:
 
             
-            scores=Run.run(GeN,_sigma_noise)
+            scores=Run.one_epoch(GeN, _sigma_noise)
 
             scheduler.step(scores['ELBO'])
             tr.set_postfix(ELBO=scores['ELBO'], LogLike=scores['LL'], KL=scores['KL'], lr=scores['lr'], sigma=scores['sigma'])

@@ -1,39 +1,20 @@
 import numpy as np
-import torch
-from torch import nn
 
 from Experiments import AbstractRegressionSetup
-from sklearn.model_selection import train_test_split
 from sklearn.datasets import load_boston
 
-from Models import get_mlp
-from Preprocessing import fitStandardScalerNormalization, normalize
 
 experiment_name='Boston'
 
-input_dim = 13
-nblayers = 1
-activation = nn.ReLU()
-layerwidth = 50
-sigma_noise = 2.5 #yarin_gal
+sigma_noise = 2.5
 seed = 42
-sigma_prior=.5
 
 class Setup(AbstractRegressionSetup): 
-    def __init__(self,  device, seed=seed, sigma_prior=sigma_prior):
+    def __init__(self,  device, seed=seed):
         super(Setup, self).__init__()
-        
-
-        self.experiment_name = experiment_name
         self.sigma_noise = sigma_noise
-        self.sigma_prior=sigma_prior
         self.seed=seed
-        self.input_dim=input_dim
-        
-        self.plot = False
-
         self.device = device
-        self.param_count, self._model = get_mlp(input_dim, layerwidth, nblayers, activation)
 
         self._preparare_data()
         self._split_holdout_data()

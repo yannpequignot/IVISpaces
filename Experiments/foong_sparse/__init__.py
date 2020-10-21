@@ -8,7 +8,7 @@ from Models import get_mlp
 
 import numpy as np
 
-from Tools import logmvn01pdf, NormalLogLikelihood
+from Tools import log_diagonal_mvn_pdf, NormalLogLikelihood
 
 experiment_name = 'Foong_sparse'
 data_path='Experiments/foong/data/'

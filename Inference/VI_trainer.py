@@ -1,24 +1,19 @@
 import torch
-from torch import nn
-import math
+
 
 
 class IVI():
-    def __init__(self, train_loader, ELBO,
-                 optimizer, scheduler):
-        
+    def __init__(self, train_loader, ELBO, optimizer):
         self.train_loader=train_loader
         self.ELBO=ELBO
-        
         self.optimizer=optimizer
 
-        self.scheduler=scheduler
-
-    def run(self, GeN, show_fn=None):
+    def one_epoch(self, GeN, _sigma):
 
         self.scores={'ELBO':0. ,
                      'KL':0.,
-                     'LL':0.
+                     'LL':0.,
+                     'sigma':0.
         }
         example_count=0.
         
@@ -28,22 +23,24 @@ class IVI():
 
                 self.optimizer.zero_grad()
                 
-                L, K, LL=self.ELBO(x,y,GeN)
+                L, K, LL, sigma=self.ELBO(x,y,GeN, _sigma)
                 L.backward()
 
                 lr = self.optimizer.param_groups[0]['lr']
 
                 self.optimizer.step()
 
-                self.scheduler.step(L.item())
                 self.scores['ELBO']+= L.item()*len(x)
                 self.scores['KL']+= K.item()*len(x)
                 self.scores['LL']+=LL.item()*len(x)
+                self.scores['sigma']+=sigma.item()*len(x)
+
                 example_count+=len(x)
     
         mean_scores={'ELBO': self.scores['ELBO']/example_count ,
              'KL':self.scores['KL']/example_count,
              'LL':self.scores['LL']/example_count,
+              'sigma':self.scores['sigma']/example_count,
              'lr':lr
             }
         return mean_scores
