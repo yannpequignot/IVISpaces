@@ -59,7 +59,7 @@ def run_MFVI(dataset, device):
     MF_dist, model, sigma_noise, time = MFVI(x_train, y_train, batch_size,
                                              layerwidth, nblayers, activation,
                                              n_epochs=n_epochs, sigma_noise_init=setup.sigma_noise,
-                                             learn_noise=False, patience=90)
+                                             learn_noise=False)
 
     theta = MF_dist(1000).detach()
     y_pred_ = model(x_pred, theta)
@@ -80,7 +80,7 @@ def run_FuNN_MFVI(dataset, device):
 
     MF_dist, model, sigma_noise, time = FuNN_MFVI(x_train, y_train, batch_size, layerwidth, nblayers, activation,
                                                   input_sampler, n_epochs=n_epochs, sigma_noise_init=setup.sigma_noise,
-                                                  learn_noise=False, patience=90)
+                                                  learn_noise=False)
 
     theta = MF_dist(1000).detach()
     y_pred_ = model(x_pred, theta)
@@ -170,14 +170,14 @@ if __name__ == "__main__":
 
     x_pred=torch.linspace(-4.,2.,500).unsqueeze(-1).to(device)
 
-#     y_pred = run_ensemble(dataset, device)
-#     RESULTS.update({'Ensemble':y_pred})
+    y_pred = run_ensemble(dataset, device)
+    RESULTS.update({'Ensemble':y_pred})
 
-#     y_pred = run_MCdropout(dataset, device)
-#     RESULTS.update({'McDropOut':y_pred})
+    y_pred = run_MCdropout(dataset, device)
+    RESULTS.update({'McDropOut':y_pred})
 
-#     y_pred = run_NN_HyVI(dataset, device)
-#     RESULTS.update({'NN-HyVI':y_pred})
+    y_pred = run_NN_HyVI(dataset, device)
+    RESULTS.update({'NN-HyVI':y_pred})
 
     y_pred = run_FuNN_HyVI(dataset, device)
     RESULTS.update({'FuNN-HyVI':y_pred})
@@ -185,10 +185,10 @@ if __name__ == "__main__":
     y_pred = run_MFVI(dataset, device)
     RESULTS.update({'MFVI':y_pred})
 
-#     y_pred = run_FuNN_MFVI(dataset, device)
-#     RESULTS.update({'FuNN-MFVI':y_pred})
+    y_pred = run_FuNN_MFVI(dataset, device)
+    RESULTS.update({'FuNN-MFVI':y_pred})
     
-#     y_pred = HMC(dataset, device)
-#     RESULTS.update({'HMC':y_pred})
+    y_pred = HMC(dataset, device)
+    RESULTS.update({'HMC':y_pred})
 
     torch.save((x_pred,RESULTS), file_name + '.pt')
