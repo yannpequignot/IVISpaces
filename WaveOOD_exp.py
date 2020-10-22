@@ -151,7 +151,7 @@ if __name__ == "__main__":
 
     ## synthetic 1D data ##
     file_name = 'Results/NEW/WaveOOD_' + date_string
-    n_epochs = 2000
+    n_epochs = 3000
     num_epochs_ensemble = 3000
     batch_size = 50
     # predictive model architecture
@@ -166,18 +166,18 @@ if __name__ == "__main__":
         script = open(__file__)
         f.write(script.read())
 
-    RESULTS = {}
+    _,RESULTS =torch.load('Results/NEW/WaveOOD_2020-10-22-00:21.pt')# {}
 
     x_pred=torch.linspace(-4.,2.,500).unsqueeze(-1).to(device)
 
-    y_pred = run_ensemble(dataset, device)
-    RESULTS.update({'Ensemble':y_pred})
+#     y_pred = run_ensemble(dataset, device)
+#     RESULTS.update({'Ensemble':y_pred})
 
-    y_pred = run_MCdropout(dataset, device)
-    RESULTS.update({'McDropOut':y_pred})
+#     y_pred = run_MCdropout(dataset, device)
+#     RESULTS.update({'McDropOut':y_pred})
 
-    y_pred = run_NN_HyVI(dataset, device)
-    RESULTS.update({'NN-HyVI':y_pred})
+#     y_pred = run_NN_HyVI(dataset, device)
+#     RESULTS.update({'NN-HyVI':y_pred})
 
     y_pred = run_FuNN_HyVI(dataset, device)
     RESULTS.update({'FuNN-HyVI':y_pred})
@@ -185,10 +185,10 @@ if __name__ == "__main__":
     y_pred = run_MFVI(dataset, device)
     RESULTS.update({'MFVI':y_pred})
 
-    y_pred = run_FuNN_MFVI(dataset, device)
-    RESULTS.update({'FuNN-MFVI':y_pred})
+#     y_pred = run_FuNN_MFVI(dataset, device)
+#     RESULTS.update({'FuNN-MFVI':y_pred})
     
-    y_pred = HMC(dataset, device)
-    RESULTS.update({'HMC':y_pred})
+#     y_pred = HMC(dataset, device)
+#     RESULTS.update({'HMC':y_pred})
 
     torch.save((x_pred,RESULTS), file_name + '.pt')

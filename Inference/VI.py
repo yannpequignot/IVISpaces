@@ -31,7 +31,7 @@ sigma_prior = .5  # Default scale for Gaussian prior on weights of predictive ne
 
 
 def NN_HyVI(x_train, y_train, batch_size, layerwidth, nblayers, activation, n_epochs=n_epochs, sigma_noise_init=1.0,
-            learn_noise=True):
+            learn_noise=True,  patience=patience):
     device = x_train.device
     train_dataset = torch.utils.data.TensorDataset(x_train, y_train)
     size_data = len(train_dataset)
@@ -97,7 +97,7 @@ def NN_HyVI(x_train, y_train, batch_size, layerwidth, nblayers, activation, n_ep
 
 def FuNN_HyVI(x_train, y_train, batch_size, layerwidth, nblayers, activation, input_sampler, n_epochs=n_epochs,
               sigma_noise_init=1.0,
-              learn_noise=True):
+              learn_noise=True, patience=patience):
     # setup data
     device = x_train.device
     train_dataset = torch.utils.data.TensorDataset(x_train, y_train)
@@ -179,7 +179,7 @@ def MFVI(x_train, y_train, batch_size, layerwidth, nblayers, activation, n_epoch
     param_count, model = get_mlp(input_dim, layerwidth, nblayers, activation)
 
     # variational distribution
-    MFVI = MeanFieldVariationalDistribution(param_count, std_init=0., sigma=0.001, device=device)
+    MFVI = MeanFieldVariationalDistribution(param_count, std_init=1., sigma=0.001, device=device)
 
     def ELBO(x_data, y_data, MFVI_dist, _sigma_noise):
         y_pred = model(x_data, MFVI_dist(n_samples_LL))
