@@ -134,11 +134,53 @@ def FunH(s, model, sampler, n=100):
         k = 1
         H = entropy_nne(s_, k=1, k_MC=200)
         while torch.isinf(H):
+            print('infinite entropy!!')
             k += 1
             H = entropy_nne(s_, k=1, k_MC=200)
         Hs[i] = H
     return Hs.mean()
 
+def ComputeEntropy(thetas, dataset, method):
+    setup_ = get_setup(dataset)
+    device=thetas[0].device
+    setup=setup_.Setup(device) 
+
+    entropies={}
+    entropies_std={}
+    x_train, y_train=setup.train_data()
+
+    sampler= lambda :OOD_sampler(x_train=x_train,n_ood=200)
+
+    ## predictive model
+    input_dim=x_train.shape[1]
+    param_count, model = get_mlp(input_dim, layerwidth, nblayers, activation)
+    
+    HMC_=models_HMC[dataset]
+    indices = torch.randperm(len(HMC_))[:1000]
+    HMC=HMC_[indices].to(device)    
+    
+    metric=(method,'paramH')
+    print(dataset+': '+'paramH')
+    Hs=[]
+    for theta in thetas:
+        H= entropy_nne(theta, k=1, k_MC=1)
+        print(H.item())
+        Hs.append(H.item())
+    
+    entropies.update({metric:np.mean(Hs)})
+    entropies_std.update({metric:np.std(Hs)})
+    
+    metric=(method,'funH')
+    print(dataset+': '+'funH')
+    Hs=[]
+    for theta in thetas:
+        H= FunH(theta,model,sampler)     
+        print(H.item())
+        Hs.append(H.item())
+
+    entropies.update({metric:np.mean(Hs)})
+    entropies_std.update({metric:np.std(Hs)})    
+    return entropies, entropies_std
 
 def paramCompareWithHMC(thetas, dataset, method):
     divergences = {}
@@ -249,6 +291,32 @@ def funCompareWithHMC(thetas, dataset, method):
     return divergences, divergences_std
 
 
+def HMC(dataset,device):
+    setup_ = get_setup(dataset)
+    setup=setup_.Setup(device) 
+    
+    x_test, y_test=setup.test_data()
+
+    ## predictive model
+    input_dim=x_test.shape[1]
+    param_count, model = get_mlp(input_dim, layerwidth, nblayers, activation)
+    
+    std_y_train = torch.tensor(1.)
+    if hasattr(setup, '_scaler_y'):
+        std_y_train=torch.tensor(setup.scaler_y.scale_, device=device).squeeze().float()
+    
+    HMC_=models_HMC[dataset]
+    indices = torch.randperm(len(HMC_))[:1000]
+    theta=HMC_[indices].to(device)
+    sigma_noise=torch.tensor(setup.sigma_noise)
+    y_pred=model(x_test,theta)
+    
+    metrics=get_metrics(y_pred, sigma_noise, y_test, std_y_train, 'HMC', 0.)
+    metrics_keys=list(metrics.keys())
+    for j in metrics_keys:
+        metrics[('HMC',j)] = metrics.pop(j)
+    return metrics, theta
+
 if __name__ == "__main__":
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -265,13 +333,13 @@ if __name__ == "__main__":
 
     ## small ##
 
-    n_epochs = 1  # 2000
+    n_epochs = 2000
     batch_size = 50
     # predictive model architecture
     layerwidth = 50
     nblayers = 1
     activation = nn.ReLU()
-    datasets = ['boston', 'concrete', 'energy', 'wine', 'yacht']
+    datasets = ['boston', 'concrete', 'energy', 'wine', 'yacht']#
     repeat = range(3)
 
     RESULTS, STDS = {dataset: {} for dataset in datasets}, {dataset: {} for dataset in datasets}
@@ -290,9 +358,8 @@ if __name__ == "__main__":
         Pdiv, Pdiv_std = {}, {}
         H, H_std = {}, {}
 
-        results = [run_NN_HyVI(dataset, device) for _ in repeat]
-
         method = 'NN-HyVI'
+        results = [run_NN_HyVI(dataset, device) for _ in repeat]
         mean, std = MeanStd([m for m, _ in results], method)
         metrics.update(mean), stds.update(std)
         pred_h.update({method: [PredictiveEntropy(theta, dataset) for _, theta in results]})
@@ -303,10 +370,8 @@ if __name__ == "__main__":
         entropies, entropies_std = ComputeEntropy([theta for _, theta in results], dataset, method)
         H.update(entropies), H_std.update(entropies_std)
 
-
+        method = 'FuNN-HyVI'
         results = [run_FuNN_HyVI(dataset, device) for _ in repeat]
-
-        method = 'FunNN-HyVI'
         mean, std = MeanStd([m for m, _ in results], method)
         metrics.update(mean), stds.update(std)
         pred_h.update({method: [PredictiveEntropy(theta, dataset) for _, theta in results]})
@@ -317,6 +382,14 @@ if __name__ == "__main__":
         entropies, entropies_std = ComputeEntropy([theta for _, theta in results], dataset, method)
         H.update(entropies), H_std.update(entropies_std)
 
+        
+        method = 'HMC'
+        results = [HMC(dataset,device) for _ in repeat]
+        metrics.update(results[0][0])
+        pred_h.update({method: [PredictiveEntropy(theta, dataset) for _, theta in results]})
+        entropies, entropies_std = ComputeEntropy([theta for _, theta in results], dataset, method)
+        H.update(entropies), H_std.update(entropies_std)
+        
         RESULTS[dataset].update(metrics)
         STDS[dataset].update(stds)
         PRED_H[dataset].update(pred_h)
