@@ -7,7 +7,7 @@ import pandas as pd
 import torch
 from torch import nn
 
-from Experiments import get_setup
+from Data import get_setup
 from Inference import NN_HyVI, FuNN_HyVI
 from Metrics import rmse, lpp, batch_entropy_nne, kl_nne, entropy_nne
 from Metrics.test_metrics import lpp_gaussian
