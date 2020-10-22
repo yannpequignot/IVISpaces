@@ -201,7 +201,7 @@ def MFVI(x_train, y_train, batch_size, layerwidth, nblayers, activation, n_epoch
         _sigma_noise = torch.log(torch.tensor(sigma_noise_init).exp() - 1.)
         optimizer = torch.optim.Adam(MFVI.parameters(), lr=learning_rate)
 
-    scheduler = ReduceLROnPlateau(optimizer, patience=patience, factor=lr_decay, min_lr=min_lr)
+    scheduler = ReduceLROnPlateau(optimizer, patience=2*patience, factor=lr_decay, min_lr=min_lr)
 
     Run = IVI(train_loader, ELBO, optimizer)
 

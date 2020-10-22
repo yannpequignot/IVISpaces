@@ -6,6 +6,7 @@ from torch import nn
 
 from Data import get_setup
 from Inference import *
+from Models import get_mlp
 
 
 def makedirs(filename):
@@ -121,11 +122,31 @@ def run_FuNN_HyVI(dataset, device):
     y_pred = y_pred_ + setup.sigma_noise * torch.randn_like(y_pred_)
     return y_pred
 
+def HMC(dataset,device):
+    setup_ = get_setup(dataset)
+    setup=setup_.Setup(device) 
+    
+    x_test, y_test=setup.test_data()
+
+    ## predictive model
+    input_dim=x_test.shape[1]
+    param_count, model = get_mlp(input_dim, layerwidth, nblayers, activation)
+    
+    
+    HMC_=models_HMC[dataset]
+    indices = torch.randperm(len(HMC_))[:1000]
+    theta=HMC_[indices].to(device)
+    sigma_noise=torch.tensor(setup.sigma_noise)
+    y_pred_=model(x_pred,theta)
+    y_pred = y_pred_ + setup.sigma_noise * torch.randn_like(y_pred_)
+    return y_pred
+    
 
 if __name__ == "__main__":
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
     date_string = datetime.now().strftime("%Y-%m-%d-%H:%M")
+    models_HMC = torch.load('Results/HMC_models.pt')
 
     ## synthetic 1D data ##
     file_name = 'Results/NEW/WaveOOD_' + date_string
@@ -165,5 +186,8 @@ if __name__ == "__main__":
 
     y_pred = run_FuNN_MFVI(dataset, device)
     RESULTS.update({'FuNN-MFVI':y_pred})
+    
+    y_pred = HMC(dataset, device)
+    RESULTS.update({'HMC':y_pred})
 
     torch.save((x_pred,RESULTS), file_name + '.pt')
