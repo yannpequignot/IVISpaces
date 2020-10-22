@@ -205,7 +205,7 @@ if __name__ == "__main__":
 
 
     ## small ##
-    file_name = 'Results/NEW/UCI_small_Exp2_' + date_string
+    file_name = 'Results/UCI_small_Exp2_' + date_string
     n_epochs = 2000
     num_epochs_ensemble = 3000
     batch_size = 50
@@ -217,7 +217,7 @@ if __name__ == "__main__":
     SEEDS = [117 + i for i in range(10)]
 
     ## large ##
-    # file_name = 'Results/NEW/UCI_large_Exp2_' + date_string
+    # file_name = 'Results/UCI_large_Exp2_' + date_string
 
     # n_epochs = 2000
     # num_epochs_ensemble = 500

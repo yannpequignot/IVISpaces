@@ -150,7 +150,7 @@ if __name__ == "__main__":
     models_HMC = torch.load('Results/HMC_models.pt')
 
     ## synthetic 1D data ##
-    file_name = 'Results/NEW/WaveOOD_' + date_string
+    file_name = 'Results/WaveOOD_' + date_string
     n_epochs = 3000
     num_epochs_ensemble = 3000
     batch_size = 50

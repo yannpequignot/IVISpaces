@@ -324,7 +324,7 @@ if __name__ == "__main__":
     kNNE = 1
 
     date_string = datetime.now().strftime("%Y-%m-%d-%H:%M")
-    file_name = 'Results/NEW/UCI_Exp1_' + date_string
+    file_name = 'Results/UCI_Exp1_' + date_string
     makedirs(file_name)
 
     with open(file_name, 'w') as f:
