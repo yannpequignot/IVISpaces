@@ -58,7 +58,8 @@ def run_MFVI(dataset, device):
 
     MF_dist, model, sigma_noise, time = MFVI(x_train, y_train, batch_size,
                                              layerwidth, nblayers, activation,
-                                             n_epochs=n_epochs, sigma_noise_init=setup.sigma_noise, learn_noise=False)
+                                             n_epochs=n_epochs, sigma_noise_init=setup.sigma_noise,
+                                             learn_noise=False, patience=90)
 
     theta = MF_dist(1000).detach()
     y_pred_ = model(x_pred, theta)
@@ -71,15 +72,15 @@ def run_FuNN_MFVI(dataset, device):
     setup = setup_.Setup(device)
     x_train, y_train = setup.train_data()
 
-    def input_sampler(n_ood=200):
+    def input_sampler(n_ood=50):
         M = -4.
         m = 2.
         X = torch.rand(n_ood, 1).to(device) * (M - m) + m
         return X
 
     MF_dist, model, sigma_noise, time = FuNN_MFVI(x_train, y_train, batch_size, layerwidth, nblayers, activation,
-                                                  input_sampler, n_epochs=n_epochs,
-                                                  sigma_noise_init=setup.sigma_noise, learn_noise=False)
+                                                  input_sampler, n_epochs=n_epochs, sigma_noise_init=setup.sigma_noise,
+                                                  learn_noise=False, patience=90)
 
     theta = MF_dist(1000).detach()
     y_pred_ = model(x_pred, theta)
@@ -106,7 +107,7 @@ def run_FuNN_HyVI(dataset, device):
     setup = setup_.Setup(device)
     x_train, y_train = setup.train_data()
 
-    def input_sampler(n_ood=200):
+    def input_sampler(n_ood=50):
         M = -4.
         m = 2.
         X = torch.rand(n_ood, 1).to(device) * (M - m) + m
