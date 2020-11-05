@@ -27,17 +27,4 @@ class Setup(AbstractRegressionSetup):
         self._y = np.expand_dims(_y, axis=1)
         
 
-    def logprior(self, theta):
-        return  self._logprior(theta)
-    
-    
-    def prediction(self,X,theta):
-        y_pred=self._normalized_prediction(X, theta, self.device).squeeze(2)
-        return y_pred
-    
-    def train_data(self):
-        return self._X_train, self._y_train
-
-    def test_data(self):
-        return self._X_test, self._y_test
         

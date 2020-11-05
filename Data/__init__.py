@@ -20,7 +20,16 @@ def switch_setup(setup):
         'powerplant': importlib.util.spec_from_file_location("powerplant", "Data/ccpowerplant/__init__.py"),
         'yacht': importlib.util.spec_from_file_location("yacht", "Data/yacht/__init__.py"),
         'navalC': importlib.util.spec_from_file_location("navalC", "Data/naval/__init__.py"),
-        'protein': importlib.util.spec_from_file_location("protein", "Data/protein/__init__.py")
+        'protein': importlib.util.spec_from_file_location("protein", "Data/protein/__init__.py"),
+
+        'concrete2': importlib.util.spec_from_file_location("concrete2", "Data/concrete2/__init__.py"),
+        'boston2': importlib.util.spec_from_file_location("boston2", "Data/boston2/__init__.py"),
+        'energy2':  importlib.util.spec_from_file_location("energy2", "Data/energy2/__init__.py") ,
+        'wine2': importlib.util.spec_from_file_location("wine2", "Data/winequality2/__init__.py"),
+        'yacht2': importlib.util.spec_from_file_location("yacht2", "Data/yacht2/__init__.py"),
+
+
+
     }[setup]
 
 
@@ -53,8 +62,8 @@ class AbstractRegressionSetup(ABC):
         self._X_test, self._y_test = normalize(self._X_test, self._y_test, self._scaler_X, self.scaler_y)
 
     def _flip_data_to_torch(self):
-        self._X = torch.tensor(self._X, device=self.device).float()
-        self._y = torch.tensor(self._y, device=self.device).float()
+        #self._X = torch.tensor(self._X, device=self.device).float()
+       # self._y = torch.tensor(self._y, device=self.device).float()
         self._X_train = torch.tensor(self._X_train, device=self.device).float()
         self._y_train = torch.tensor(self._y_train, device=self.device).float()
         self._X_test = torch.tensor(self._X_test, device=self.device).float()

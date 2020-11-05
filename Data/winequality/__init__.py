@@ -8,6 +8,7 @@ sigma_noise = .5
 seed = 42
 
 
+
 class Setup(AbstractRegressionSetup): 
     def __init__(self, device, seed=seed):
         super(Setup, self).__init__()

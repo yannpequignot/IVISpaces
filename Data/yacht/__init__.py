@@ -6,10 +6,8 @@ from Data import AbstractRegressionSetup
 
 experiment_name='Yacht'
 
-input_dim = 6
 sigma_noise = 1.4 #yarin gal 1.4
 seed = 42
-sigma_prior=0.5
 
 class Setup(AbstractRegressionSetup): 
     def __init__(self, device, seed=seed):
