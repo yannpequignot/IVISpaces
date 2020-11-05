@@ -32,9 +32,8 @@ def run_ensemble(dataset, device, seed):
     std_y_train = torch.tensor(1.)
     if hasattr(setup, '_scaler_y'):
         std_y_train = torch.tensor(setup.scaler_y.scale_, device=device).squeeze().float()
-
-    model_list, time = ensemble(x_train, y_train, batch_size, layerwidth, activation, num_epochs=num_epochs_ensemble,
-                                num_models=5)
+    model_list, time = ensemble(x_train, y_train, batch_size, layerwidth, activation, 
+                                num_epochs=num_epochs_ensemble, num_models=5)
 
     x_test, y_test = setup.test_data()
     y_pred = ensemble_predict(x_test, model_list)
@@ -84,7 +83,7 @@ def run_MFVI(dataset, device, seed):
         std_y_train = torch.tensor(setup.scaler_y.scale_, device=device).squeeze().float()
 
     MF_dist, model, sigma_noise, time = MFVI(x_train, y_train, batch_size, layerwidth, nblayers, activation,
-                                             n_epochs=n_epochs, sigma_noise_init=1.0, learn_noise=True)
+                                             n_epochs=n_epochs, sigma_noise_init=1.0, learn_noise=True,patience=2*patience)
 
     x_test, y_test = setup.test_data()
     theta = MF_dist(1000).detach()
@@ -113,7 +112,7 @@ def run_FuNN_MFVI(dataset, device, seed):
 
     MF_dist, model, sigma_noise, time = FuNN_MFVI(x_train, y_train, batch_size, layerwidth, nblayers, activation,
                                                   input_sampler, n_epochs=n_epochs, sigma_noise_init=1.0,
-                                                  learn_noise=True)
+                                                  learn_noise=True, patience=patience)
 
     x_test, y_test = setup.test_data()
     theta = MF_dist(1000).detach()
@@ -135,7 +134,7 @@ def run_NN_HyVI(dataset, device, seed):
         std_y_train = torch.tensor(setup.scaler_y.scale_, device=device).squeeze().float()
 
     gen, model, sigma_noise, time = NN_HyVI(x_train, y_train, batch_size, layerwidth, nblayers, activation,
-                                            n_epochs=n_epochs, sigma_noise_init=1.0, learn_noise=True)
+                                            n_epochs=n_epochs, sigma_noise_init=1.0, learn_noise=True, patience=patience)
 
     x_test, y_test = setup.test_data()
     theta = gen(1000).detach()
@@ -163,7 +162,8 @@ def run_FuNN_HyVI(dataset, device, seed):
         return X
 
     gen, model, sigma_noise, time = FuNN_HyVI(x_train, y_train, batch_size, layerwidth, nblayers, activation,
-                                              input_sampler, n_epochs=n_epochs, sigma_noise_init=1.0, learn_noise=True)
+                                              input_sampler, n_epochs=n_epochs, sigma_noise_init=1.0,
+                                              learn_noise=True, patience=patience)
 
     x_test, y_test = setup.test_data()
     theta = gen(1000).detach()
@@ -222,6 +222,7 @@ if __name__ == "__main__":
         n_epochs = 2000
         num_epochs_ensemble = 3000
         batch_size = 50
+        patience=30
         # predictive model architecture
         layerwidth = 50
         nblayers = 1
@@ -236,20 +237,21 @@ if __name__ == "__main__":
         n_epochs = 2000
         num_epochs_ensemble = 500
         batch_size = 500
+        patience=10
         # predictive model architecture
         layerwidth = 100
         nblayers = 1
         activation = nn.ReLU()
-        datasets = ['protein']#['kin8nm', 'navalC', 'powerplant', 'protein']
-        SEEDS = [117 + i for i in range(5)]
+        datasets = ['kin8nm', 'navalC', 'powerplant', 'protein']
+        SEEDS = [117 + i for i in range(1)]
 
     makedirs(file_name)
     with open(file_name, 'w') as f:
         script = open(__file__)
         f.write(script.read())
 
-    RESULTS, STDS = torch.load('Results/Exp2/UCI_large_Exp2_2020-11-03-22:17_metrics.pt')#{dataset: {} for dataset in datasets}, {dataset: {} for dataset in datasets}
-    PRED_H = torch.load('Results/Exp2/UCI_large_Exp2_2020-11-03-22:17_entropy.pt')#{dataset: {} for dataset in datasets}
+    RESULTS, STDS = {dataset: {} for dataset in datasets}, {dataset: {} for dataset in datasets}
+    PRED_H = {dataset: {} for dataset in datasets}
 
     for dataset in datasets:
         print(dataset)
@@ -258,17 +260,18 @@ if __name__ == "__main__":
         metrics = {}
         stds = {}
 
-#         results = [run_ensemble(dataset, device, seed) for seed in SEEDS]
-#         mean, std = MeanStd([m for m, h in results], 'Ensemble')
-#         pred_h.update({'Ensemble': [h for m, h in results]})
-#         metrics.update(mean)
-#         stds.update(std)
+        results = [run_ensemble(dataset, device, seed) for seed in SEEDS]
+        mean, std = MeanStd([m for m, h in results], 'Ensemble')
+        pred_h.update({'Ensemble': [h for m, h in results]})
+        metrics.update(mean)
+        stds.update(std)
 
-#         results = [run_MCdropout(dataset, device, seed) for seed in SEEDS]
-#         mean, std = MeanStd([m for m, h in results], 'McDropOut')
-#         pred_h.update({'McDropOut': [h for m, h in results]})
-#         metrics.update(mean)
-#         stds.update(std)
+
+        results = [run_MCdropout(dataset, device, seed) for seed in SEEDS]
+        mean, std = MeanStd([m for m, h in results], 'McDropOut')
+        pred_h.update({'McDropOut': [h for m, h in results]})
+        metrics.update(mean)
+        stds.update(std)
 
         results = [run_NN_HyVI(dataset, device, seed) for seed in SEEDS]
         mean, std = MeanStd([m for m, h in results], 'NN-HyVI')
