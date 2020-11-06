@@ -15,8 +15,6 @@ class Setup(AbstractRegressionSetup):
         self.sigma_noise = sigma_noise
         self.seed=seed
 
-        self.input_dim=input_dim
-
         self.device = device
 
         self._preparare_data()

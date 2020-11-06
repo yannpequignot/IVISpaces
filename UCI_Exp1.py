@@ -13,7 +13,6 @@ from Metrics import rmse, lpp, batch_entropy_nne, kl_nne, entropy_nne
 from Metrics.test_metrics import lpp_gaussian
 from Models import get_mlp
 
-
 def makedirs(filename):
     if not os.path.exists(os.path.dirname(filename)):
         os.makedirs(os.path.dirname(filename))
@@ -313,6 +312,7 @@ def HMC(dataset,device):
     
     metrics=get_metrics(y_pred, sigma_noise, y_test, std_y_train, 'HMC', 0.)
     metrics_keys=list(metrics.keys())
+    print(metrics['RMSE'], torch.mean((y_pred.mean(0)-y_test)**2).sqrt()*std_y_train)
     for j in metrics_keys:
         metrics[('HMC',j)] = metrics.pop(j)
     return metrics, theta
@@ -358,29 +358,29 @@ if __name__ == "__main__":
         Pdiv, Pdiv_std = {}, {}
         H, H_std = {}, {}
 
-        method = 'NN-HyVI'
-        results = [run_NN_HyVI(dataset, device) for _ in repeat]
-        mean, std = MeanStd([m for m, _ in results], method)
-        metrics.update(mean), stds.update(std)
-        pred_h.update({method: [PredictiveEntropy(theta, dataset) for _, theta in results]})
-        Pdivergences, Pdivergences_std = paramCompareWithHMC([theta for _, theta in results], dataset, method)
-        Pdiv.update(Pdivergences), Pdiv_std.update(Pdivergences_std)
-        divergences, divergences_std = funCompareWithHMC([theta for _, theta in results], dataset, method)
-        div.update(divergences), div_std.update(divergences_std)
-        entropies, entropies_std = ComputeEntropy([theta for _, theta in results], dataset, method)
-        H.update(entropies), H_std.update(entropies_std)
+#         method = 'NN-HyVI'
+#         results = [run_NN_HyVI(dataset, device) for _ in repeat]
+#         mean, std = MeanStd([m for m, _ in results], method)
+#         metrics.update(mean), stds.update(std)
+#         pred_h.update({method: [PredictiveEntropy(theta, dataset) for _, theta in results]})
+#         Pdivergences, Pdivergences_std = paramCompareWithHMC([theta for _, theta in results], dataset, method)
+#         Pdiv.update(Pdivergences), Pdiv_std.update(Pdivergences_std)
+#         divergences, divergences_std = funCompareWithHMC([theta for _, theta in results], dataset, method)
+#         div.update(divergences), div_std.update(divergences_std)
+#         entropies, entropies_std = ComputeEntropy([theta for _, theta in results], dataset, method)
+#         H.update(entropies), H_std.update(entropies_std)
 
-        method = 'FuNN-HyVI'
-        results = [run_FuNN_HyVI(dataset, device) for _ in repeat]
-        mean, std = MeanStd([m for m, _ in results], method)
-        metrics.update(mean), stds.update(std)
-        pred_h.update({method: [PredictiveEntropy(theta, dataset) for _, theta in results]})
-        Pdivergences, Pdivergences_std = paramCompareWithHMC([theta for _, theta in results], dataset, method)
-        Pdiv.update(Pdivergences), Pdiv_std.update(Pdivergences_std)
-        divergences, divergences_std = funCompareWithHMC([theta for _, theta in results], dataset, method)
-        div.update(divergences), div_std.update(divergences_std)
-        entropies, entropies_std = ComputeEntropy([theta for _, theta in results], dataset, method)
-        H.update(entropies), H_std.update(entropies_std)
+#         method = 'FuNN-HyVI'
+#         results = [run_FuNN_HyVI(dataset, device) for _ in repeat]
+#         mean, std = MeanStd([m for m, _ in results], method)
+#         metrics.update(mean), stds.update(std)
+#         pred_h.update({method: [PredictiveEntropy(theta, dataset) for _, theta in results]})
+#         Pdivergences, Pdivergences_std = paramCompareWithHMC([theta for _, theta in results], dataset, method)
+#         Pdiv.update(Pdivergences), Pdiv_std.update(Pdivergences_std)
+#         divergences, divergences_std = funCompareWithHMC([theta for _, theta in results], dataset, method)
+#         div.update(divergences), div_std.update(divergences_std)
+#         entropies, entropies_std = ComputeEntropy([theta for _, theta in results], dataset, method)
+#         H.update(entropies), H_std.update(entropies_std)
 
         
         method = 'HMC'
@@ -399,9 +399,8 @@ if __name__ == "__main__":
         pDIV[dataset].update(Pdiv), pDIV_std[dataset].update(Pdiv_std)
         ENT[dataset].update(H), ENT_std[dataset].update(H_std)
 
-        torch.save((RESULTS, STDS), file_name + '_metrics.pt')
-        torch.save(PRED_H, file_name + '_pred_entropy.pt')
-        torch.save([(DIV,DIV_std),(pDIV,pDIV_std)], file_name + '_kldiv.pt')
-        torch.save((ENT,ENT_std), file_name + '_post_entropy.pt')
-
-
+#         torch.save((RESULTS, STDS), file_name + '_metrics.pt')
+#         torch.save(PRED_H, file_name + '_pred_entropy.pt')
+#         torch.save([(DIV,DIV_std),(pDIV,pDIV_std)], file_name + '_kldiv.pt')
+#         torch.save((ENT,ENT_std), file_name + '_post_entropy.pt')
+        [print(key, value) for key, value in RESULTS.items()]

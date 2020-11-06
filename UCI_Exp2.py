@@ -7,8 +7,7 @@ from torch import nn
 
 from Data import get_setup
 from Inference import *
-from Metrics import rmse, lpp, batch_entropy_nne, kl_nne
-from Metrics.test_metrics import lpp_gaussian
+from Metrics import rmse, lpp, batch_entropy_nne, kl_nne, lpp_gaussian
 import argparse
 
 nb_samples_H=1000
