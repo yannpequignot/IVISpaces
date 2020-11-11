@@ -28,9 +28,8 @@ def run_ensemble(dataset, device, seed):
     setup_ = get_setup(dataset)
     setup = setup_.Setup(device, seed=seed)
     x_train, y_train = setup.train_data()
-    std_y_train = torch.tensor(1.)
-    if hasattr(setup, '_scaler_y'):
-        std_y_train = torch.tensor(setup.scaler_y.scale_, device=device).squeeze().float()
+    std_y_train = torch.tensor(setup.scaler_y.scale_, device=device).squeeze().float()
+
     model_list, time = ensemble(x_train, y_train, batch_size, layerwidth, activation, 
                                 num_epochs=num_epochs_ensemble, num_models=5)
 
@@ -50,11 +49,9 @@ def run_MCdropout(dataset, device, seed):
     x_train, y_train = setup.train_data()
 
     batch_size = len(x_train)
-
-    std_y_train = torch.tensor(1.)
-    if hasattr(setup, '_scaler_y'):
-        std_y_train = torch.tensor(setup.scaler_y.scale_, device=device).squeeze().float()
-
+    
+    std_y_train = torch.tensor(setup.scaler_y.scale_, device=device).squeeze().float()
+    
     trainer = MC_Dropout(x_train, y_train, batch_size, layerwidth, init_sigma_noise=1., drop_prob=0.05,
                          learn_noise=True,
                          activation=activation)
@@ -77,9 +74,7 @@ def run_MFVI(dataset, device, seed):
     setup_ = get_setup(dataset)
     setup = setup_.Setup(device, seed=seed)
     x_train, y_train = setup.train_data()
-    std_y_train = torch.tensor(1.)
-    if hasattr(setup, '_scaler_y'):
-        std_y_train = torch.tensor(setup.scaler_y.scale_, device=device).squeeze().float()
+    std_y_train = torch.tensor(setup.scaler_y.scale_, device=device).squeeze().float()
 
     MF_dist, model, sigma_noise, time = MFVI(x_train, y_train, batch_size, layerwidth, nblayers, activation,
                                              n_epochs=n_epochs, sigma_noise_init=1.0, learn_noise=True,patience=2*patience)
@@ -99,9 +94,7 @@ def run_FuNN_MFVI(dataset, device, seed):
     setup_ = get_setup(dataset)
     setup = setup_.Setup(device, seed=seed)
     x_train, y_train = setup.train_data()
-    std_y_train = torch.tensor(1.)
-    if hasattr(setup, '_scaler_y'):
-        std_y_train = torch.tensor(setup.scaler_y.scale_, device=device).squeeze().float()
+    std_y_train = torch.tensor(setup.scaler_y.scale_, device=device).squeeze().float()
 
     def input_sampler(n_ood=200):
         M = x_train.max(0, keepdim=True)[0]
@@ -128,9 +121,7 @@ def run_NN_HyVI(dataset, device, seed):
     setup_ = get_setup(dataset)
     setup = setup_.Setup(device, seed=seed)
     x_train, y_train = setup.train_data()
-    std_y_train = torch.tensor(1.)
-    if hasattr(setup, '_scaler_y'):
-        std_y_train = torch.tensor(setup.scaler_y.scale_, device=device).squeeze().float()
+    std_y_train = torch.tensor(setup.scaler_y.scale_, device=device).squeeze().float()
 
     gen, model, sigma_noise, time = NN_HyVI(x_train, y_train, batch_size, layerwidth, nblayers, activation,
                                             n_epochs=n_epochs, sigma_noise_init=1.0, learn_noise=True, patience=patience)
@@ -150,9 +141,7 @@ def run_FuNN_HyVI(dataset, device, seed):
     setup_ = get_setup(dataset)
     setup = setup_.Setup(device, seed=seed)
     x_train, y_train = setup.train_data()
-    std_y_train = torch.tensor(1.)
-    if hasattr(setup, '_scaler_y'):
-        std_y_train = torch.tensor(setup.scaler_y.scale_, device=device).squeeze().float()
+    std_y_train = torch.tensor(setup.scaler_y.scale_, device=device).squeeze().float()
 
     def input_sampler(n_ood=200):
         M = x_train.max(0, keepdim=True)[0]
@@ -242,7 +231,7 @@ if __name__ == "__main__":
         nblayers = 1
         activation = nn.ReLU()
         datasets = ['kin8nm', 'navalC', 'powerplant', 'protein']
-        SEEDS = [117 + i for i in range(1)]
+        SEEDS = [117 + i for i in range(5)]
 
     makedirs(file_name)
     with open(file_name, 'w') as f:

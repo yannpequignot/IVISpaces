@@ -22,9 +22,8 @@ def run_NN_HyVI(dataset, device):
     setup_ = get_setup(dataset)
     setup = setup_.Setup(device)
     x_train, y_train = setup.train_data()
-    std_y_train = torch.tensor(1.)
-    if hasattr(setup, '_scaler_y'):
-        std_y_train = torch.tensor(setup.scaler_y.scale_, device=device).squeeze().float()
+    std_y_train = torch.tensor(setup.scaler_y.scale_, device=device).squeeze().float()
+
     sigma_noise_init = setup.sigma_noise
 
     gen, model, sigma_noise, time = NN_HyVI(x_train, y_train, batch_size, layerwidth, nblayers, activation,
@@ -41,9 +40,8 @@ def run_FuNN_HyVI(dataset, device):
     setup_ = get_setup(dataset)
     setup = setup_.Setup(device)
     x_train, y_train = setup.train_data()
-    std_y_train = torch.tensor(1.)
-    if hasattr(setup, '_scaler_y'):
-        std_y_train = torch.tensor(setup.scaler_y.scale_, device=device).squeeze().float()
+    std_y_train = torch.tensor(setup.scaler_y.scale_, device=device).squeeze().float()
+
     sigma_noise_init = setup.sigma_noise
 
     def input_sampler(n_ood=200):
@@ -300,10 +298,8 @@ def HMC(dataset,device):
     input_dim=x_test.shape[1]
     param_count, model = get_mlp(input_dim, layerwidth, nblayers, activation)
     
-    std_y_train = torch.tensor(1.)
-    if hasattr(setup, '_scaler_y'):
-        std_y_train=torch.tensor(setup.scaler_y.scale_, device=device).squeeze().float()
-    
+    std_y_train = torch.tensor(setup.scaler_y.scale_, device=device).squeeze().float()
+
     HMC_=models_HMC[dataset]
     indices = torch.randperm(len(HMC_))[:1000]
     theta=HMC_[indices].to(device)
@@ -358,29 +354,29 @@ if __name__ == "__main__":
         Pdiv, Pdiv_std = {}, {}
         H, H_std = {}, {}
 
-#         method = 'NN-HyVI'
-#         results = [run_NN_HyVI(dataset, device) for _ in repeat]
-#         mean, std = MeanStd([m for m, _ in results], method)
-#         metrics.update(mean), stds.update(std)
-#         pred_h.update({method: [PredictiveEntropy(theta, dataset) for _, theta in results]})
-#         Pdivergences, Pdivergences_std = paramCompareWithHMC([theta for _, theta in results], dataset, method)
-#         Pdiv.update(Pdivergences), Pdiv_std.update(Pdivergences_std)
-#         divergences, divergences_std = funCompareWithHMC([theta for _, theta in results], dataset, method)
-#         div.update(divergences), div_std.update(divergences_std)
-#         entropies, entropies_std = ComputeEntropy([theta for _, theta in results], dataset, method)
-#         H.update(entropies), H_std.update(entropies_std)
+        method = 'NN-HyVI'
+        results = [run_NN_HyVI(dataset, device) for _ in repeat]
+        mean, std = MeanStd([m for m, _ in results], method)
+        metrics.update(mean), stds.update(std)
+        pred_h.update({method: [PredictiveEntropy(theta, dataset) for _, theta in results]})
+        Pdivergences, Pdivergences_std = paramCompareWithHMC([theta for _, theta in results], dataset, method)
+        Pdiv.update(Pdivergences), Pdiv_std.update(Pdivergences_std)
+        divergences, divergences_std = funCompareWithHMC([theta for _, theta in results], dataset, method)
+        div.update(divergences), div_std.update(divergences_std)
+        entropies, entropies_std = ComputeEntropy([theta for _, theta in results], dataset, method)
+        H.update(entropies), H_std.update(entropies_std)
 
-#         method = 'FuNN-HyVI'
-#         results = [run_FuNN_HyVI(dataset, device) for _ in repeat]
-#         mean, std = MeanStd([m for m, _ in results], method)
-#         metrics.update(mean), stds.update(std)
-#         pred_h.update({method: [PredictiveEntropy(theta, dataset) for _, theta in results]})
-#         Pdivergences, Pdivergences_std = paramCompareWithHMC([theta for _, theta in results], dataset, method)
-#         Pdiv.update(Pdivergences), Pdiv_std.update(Pdivergences_std)
-#         divergences, divergences_std = funCompareWithHMC([theta for _, theta in results], dataset, method)
-#         div.update(divergences), div_std.update(divergences_std)
-#         entropies, entropies_std = ComputeEntropy([theta for _, theta in results], dataset, method)
-#         H.update(entropies), H_std.update(entropies_std)
+        method = 'FuNN-HyVI'
+        results = [run_FuNN_HyVI(dataset, device) for _ in repeat]
+        mean, std = MeanStd([m for m, _ in results], method)
+        metrics.update(mean), stds.update(std)
+        pred_h.update({method: [PredictiveEntropy(theta, dataset) for _, theta in results]})
+        Pdivergences, Pdivergences_std = paramCompareWithHMC([theta for _, theta in results], dataset, method)
+        Pdiv.update(Pdivergences), Pdiv_std.update(Pdivergences_std)
+        divergences, divergences_std = funCompareWithHMC([theta for _, theta in results], dataset, method)
+        div.update(divergences), div_std.update(divergences_std)
+        entropies, entropies_std = ComputeEntropy([theta for _, theta in results], dataset, method)
+        H.update(entropies), H_std.update(entropies_std)
 
         
         method = 'HMC'
@@ -399,8 +395,8 @@ if __name__ == "__main__":
         pDIV[dataset].update(Pdiv), pDIV_std[dataset].update(Pdiv_std)
         ENT[dataset].update(H), ENT_std[dataset].update(H_std)
 
-#         torch.save((RESULTS, STDS), file_name + '_metrics.pt')
-#         torch.save(PRED_H, file_name + '_pred_entropy.pt')
-#         torch.save([(DIV,DIV_std),(pDIV,pDIV_std)], file_name + '_kldiv.pt')
-#         torch.save((ENT,ENT_std), file_name + '_post_entropy.pt')
-        [print(key, value) for key, value in RESULTS.items()]
+        torch.save((RESULTS, STDS), file_name + '_metrics.pt')
+        torch.save(PRED_H, file_name + '_pred_entropy.pt')
+        torch.save([(DIV,DIV_std),(pDIV,pDIV_std)], file_name + '_kldiv.pt')
+        torch.save((ENT,ENT_std), file_name + '_post_entropy.pt')
+#        [print(key, value) for key, value in RESULTS.items()]

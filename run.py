@@ -9,10 +9,10 @@ if __name__ == "__main__":
 
     print('Exp2 large')
     pool.map(run_script, ["UCI_Exp2 --set=large"])  
-#     print('Exp1')
-#     pool.map(run_script, ["UCI_Exp1"])  
-#     print('Exp2 small')
-#     pool.map(run_script, ["UCI_Exp2 --set=small"])  
+    print('Exp1')
+    pool.map(run_script, ["UCI_Exp1"])  
+    print('Exp2 small')
+    pool.map(run_script, ["UCI_Exp2 --set=small"])  
 
     
     
