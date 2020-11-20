@@ -10,23 +10,15 @@ from Inference import *
 from Metrics import rmse, lpp, batch_entropy_nne, kl_nne, lpp_gaussian
 import argparse
 
-nb_samples_H=1000
 
 def makedirs(filename):
     if not os.path.exists(os.path.dirname(filename)):
         os.makedirs(os.path.dirname(filename))
 
 
-def OOD_sampler(x, n_ood):
-    M = x.max(0, keepdim=True)[0]
-    m = x.min(0, keepdim=True)[0]
-    X_ood = torch.rand(n_ood, x.shape[1]).to(device) * (M - m) + m
-    return X_ood
-
-
-def run_ensemble(dataset, device, seed):
+def run_ensemble(dataset, device):
     setup_ = get_setup(dataset)
-    setup = setup_.Setup(device, seed=seed)
+    setup = setup_.Setup(device)
     x_train, y_train = setup.train_data()
     std_y_train = torch.tensor(setup.scaler_y.scale_, device=device).squeeze().float()
 
@@ -34,19 +26,22 @@ def run_ensemble(dataset, device, seed):
                                 num_epochs=num_epochs_ensemble, num_models=5)
 
     x_test, y_test = setup.test_data()
-    y_pred = ensemble_predict(x_test, model_list)
-    metrics = get_metrics(y_pred, torch.tensor(0.), y_test, std_y_train, time, gaussian_prediction=True)
-    x_data=torch.cat(x_train,x_test)
-    X = [x_train[:nb_samples_H], x_test[:nb_samples_H], OOD_sampler(x_data, nb_samples_H)]
-    _Y = [ensemble_predict(x, model_list) for x in X]
-    Y = [y.mean(0) + y.std(0) * torch.randn(1000, y.shape[1], 1).to(device) for y in _Y]
-    H = [batch_entropy_nne(y.transpose(0, 1), k=30) for y in Y]
-    return metrics, H
+    x_ood, y_ood = setup.ood_data()
+    X = [x_train, x_test, x_ood]
+    Y = [torch.cat([ensemble_predict(x_, model_list) for x_ in torch.split(x,10000)], dim=1)  for x in X]
+    metrics_test = get_metrics(Y[1], torch.tensor(0.), y_test, std_y_train, time, gaussian_prediction=True)
+    metrics_ood = get_metrics(Y[2], torch.tensor(0.), y_ood, std_y_train, time, gaussian_prediction=True)
 
+    Y_target=[y_train,y_test, y_ood]
+    Y_uncertain = [y.mean(0) + y.std(0) * torch.randn(nb_predictions, y.shape[1], 1).to(device) for y in Y]
+    H = [torch.cat([batch_entropy_nne(y_, k=30) for y_ in torch.split(y.transpose(0,1),1000,dim=0)]) for y in Y_uncertain]
+    SE=[(pred.mean(0)-target)**2 for pred,target in zip(Y,Y_target)]
+    RSE=[e.sqrt()*std_y_train for e in SE]
+    return (metrics_test,metrics_ood), (H,SE)
 
-def run_MCdropout(dataset, device, seed):
+def run_MCdropout(dataset, device):
     setup_ = get_setup(dataset)
-    setup = setup_.Setup(device, seed=seed)
+    setup = setup_.Setup(device)
     x_train, y_train = setup.train_data()
 
     batch_size = len(x_train)
@@ -61,41 +56,46 @@ def run_MCdropout(dataset, device, seed):
     time = trainer.fit(num_epochs=n_epochs, learn_rate=1e-3, weight_decay=weight_decay)
 
     x_test, y_test = setup.test_data()
-    y_pred, sigma_noise = trainer.predict(x_test, 1000)
-    metrics = get_metrics(y_pred, sigma_noise, y_test, std_y_train, time, gaussian_prediction=True)
+    x_ood, y_ood = setup.ood_data()
+    X = [x_train, x_test, x_ood]
+    Y = [trainer.predict(x, nb_predictions) for x in X]
+    metrics_test = get_metrics(Y[1][0], Y[1][1], y_test, std_y_train, time, gaussian_prediction=True)
+    metrics_ood = get_metrics(Y[2][0], Y[2][1], y_ood, std_y_train, time, gaussian_prediction=True)
 
-    x_data=torch.cat(x_train,x_test)
-    X = [x_train[:nb_samples_H], x_test[:nb_samples_H], OOD_sampler(x_data, nb_samples_H)]
-    _Y = [trainer.predict(x, 1000)[0] for x in X]
-    Y = [y.mean(0) + y.std(0) * torch.randn(1000, y.shape[1], 1).to(device) for y in _Y]
-    H = [batch_entropy_nne(y.transpose(0, 1), k=30) for y in Y]
-    return metrics, H
+    Y_target=[y_train,y_test, y_ood]
+    Y_uncertain = [y[0].mean(0) + y[0].std(0) * torch.randn(nb_predictions, y[0].shape[1], 1).to(device) for y in Y]
+    H = [torch.cat([batch_entropy_nne(y_, k=30) for y_ in torch.split(y.transpose(0,1),1000,dim=0)]) for y in Y_uncertain]
+    SE=[(pred[0].mean(0)-target)**2 for pred,target in zip(Y,Y_target)]
+    RSE=[e.sqrt()*std_y_train for e in SE]
+    return (metrics_test,metrics_ood), (H,SE)
 
-
-def run_MFVI(dataset, device, seed):
+def run_MFVI(dataset, device):
     setup_ = get_setup(dataset)
-    setup = setup_.Setup(device, seed=seed)
+    setup = setup_.Setup(device)
     x_train, y_train = setup.train_data()
     std_y_train = torch.tensor(setup.scaler_y.scale_, device=device).squeeze().float()
 
     MF_dist, model, sigma_noise, time = MFVI(x_train, y_train, batch_size, layerwidth, nblayers, activation,
                                              n_epochs=n_epochs, sigma_noise_init=1.0, learn_noise=True,patience=2*patience)
 
+    theta = MF_dist(nb_predictions).detach()
     x_test, y_test = setup.test_data()
-    theta = MF_dist(1000).detach()
-    #y_pred = model(x_test, theta)
-    y_pred = model(x_test.cpu(), theta.cpu()).to(device)
-    metrics = get_metrics(y_pred, sigma_noise, y_test, std_y_train, time)
-    x_data=torch.cat(x_train,x_test)
-    X = [x_train[:nb_samples_H], x_test[:nb_samples_H], OOD_sampler(x_data, nb_samples_H)]
-    Y = [model(x, theta) for x in X]
-    H = [batch_entropy_nne(y.transpose(0, 1), k=30) for y in Y]
-    return metrics, H
+    x_ood, y_ood = setup.ood_data()
+    X = [x_train, x_test, x_ood]
+    Y = [torch.cat([model(x_, theta) for x_ in torch.split(x,1000)], dim=1)  for x in X]
+    metrics_test = get_metrics(Y[1], sigma_noise, y_test, std_y_train, time, gaussian_prediction=True)
+    metrics_ood = get_metrics(Y[2], sigma_noise, y_ood, std_y_train, time, gaussian_prediction=True)
 
+    Y_target=[y_train,y_test, y_ood]
+    Y_uncertain = [y.mean(0) + y.std(0) * torch.randn(nb_predictions, y.shape[1], 1).to(device) for y in Y]
+    H = [torch.cat([batch_entropy_nne(y_, k=30) for y_ in torch.split(y.transpose(0,1),1000,dim=0)]) for y in Y_uncertain]
+    SE=[(pred.mean(0)-target)**2 for pred,target in zip(Y,Y_target)]
+    RSE=[e.sqrt()*std_y_train for e in SE]
+    return (metrics_test,metrics_ood), (H,SE)
 
-def run_FuNN_MFVI(dataset, device, seed):
+def run_FuNN_MFVI(dataset, device):
     setup_ = get_setup(dataset)
-    setup = setup_.Setup(device, seed=seed)
+    setup = setup_.Setup(device)
     x_train, y_train = setup.train_data()
     x_test, y_test = setup.test_data()
     std_y_train = torch.tensor(setup.scaler_y.scale_, device=device).squeeze().float()
@@ -111,41 +111,48 @@ def run_FuNN_MFVI(dataset, device, seed):
                                                   input_sampler, n_epochs=n_epochs, sigma_noise_init=1.0,
                                                   learn_noise=True, patience=patience)
 
-    theta = MF_dist(1000).detach()
-    #y_pred = model(x_test, theta)
-    y_pred = model(x_test.cpu(), theta.cpu()).to(device)
-    metrics = get_metrics(y_pred, sigma_noise, y_test, std_y_train, time)
-    x_data=torch.cat(x_train,x_test)
-    X = [x_train[:nb_samples_H], x_test[:nb_samples_H], OOD_sampler(x_data, nb_samples_H)]
-    Y = [model(x, theta) for x in X]
-    H = [batch_entropy_nne(y.transpose(0, 1), k=30) for y in Y]
-    return metrics, H
+    theta = MF_dist(nb_predictions).detach()
+    x_test, y_test = setup.test_data()
+    x_ood, y_ood = setup.ood_data()
+    X = [x_train, x_test, x_ood]
+    Y = [torch.cat([model(x_, theta) for x_ in torch.split(x,1000)], dim=1)  for x in X]
+    metrics_test = get_metrics(Y[1], sigma_noise, y_test, std_y_train, time, gaussian_prediction=True)
+    metrics_ood = get_metrics(Y[2], sigma_noise, y_ood, std_y_train, time, gaussian_prediction=True)
 
+    Y_target=[y_train,y_test, y_ood]
+    Y_uncertain = [y.mean(0) + y.std(0) * torch.randn(nb_predictions, y.shape[1], 1).to(device) for y in Y]
+    H = [torch.cat([batch_entropy_nne(y_, k=30) for y_ in torch.split(y.transpose(0,1),1000,dim=0)]) for y in Y_uncertain]
+    SE=[(pred.mean(0)-target)**2 for pred,target in zip(Y,Y_target)]
+    RSE=[e.sqrt()*std_y_train for e in SE]
+    return (metrics_test,metrics_ood), (H,SE)
 
-def run_NN_HyVI(dataset, device, seed):
+def run_NN_HyVI(dataset, device):
     setup_ = get_setup(dataset)
-    setup = setup_.Setup(device, seed=seed)
+    setup = setup_.Setup(device)
     x_train, y_train = setup.train_data()
     std_y_train = torch.tensor(setup.scaler_y.scale_, device=device).squeeze().float()
 
     gen, model, sigma_noise, time = NN_HyVI(x_train, y_train, batch_size, layerwidth, nblayers, activation,
                                             n_epochs=n_epochs, sigma_noise_init=1.0, learn_noise=True, patience=patience)
 
+    theta = gen(nb_predictions).detach()
     x_test, y_test = setup.test_data()
-    theta = gen(1000).detach()
-    #y_pred = model(x_test, theta)
-    y_pred = model(x_test.cpu(), theta.cpu()).to(device)
-    metrics = get_metrics(y_pred, sigma_noise, y_test, std_y_train, time)
-    x_data=torch.cat(x_train,x_test)
-    X = [x_train[:nb_samples_H], x_test[:nb_samples_H], OOD_sampler(x_data, nb_samples_H)]
-    Y = [model(x, theta) for x in X]
-    H = [batch_entropy_nne(y.transpose(0, 1), k=30) for y in Y]
-    return metrics, H
+    x_ood, y_ood = setup.ood_data()
+    X = [x_train, x_test, x_ood]
+    Y = [torch.cat([model(x_, theta) for x_ in torch.split(x,1000)], dim=1)  for x in X]
+    metrics_test = get_metrics(Y[1], sigma_noise, y_test, std_y_train, time, gaussian_prediction=True)
+    metrics_ood = get_metrics(Y[2], sigma_noise, y_ood, std_y_train, time, gaussian_prediction=True)
 
+    Y_target=[y_train,y_test, y_ood]
+    Y_uncertain = [y.mean(0) + y.std(0) * torch.randn(nb_predictions, y.shape[1], 1).to(device) for y in Y]
+    H = [torch.cat([batch_entropy_nne(y_, k=30) for y_ in torch.split(y.transpose(0,1),1000,dim=0)]) for y in Y_uncertain]
+    SE=[(pred.mean(0)-target)**2 for pred,target in zip(Y,Y_target)]
+    RSE=[e.sqrt()*std_y_train for e in SE]
+    return (metrics_test,metrics_ood), (H,SE)
 
-def run_FuNN_HyVI(dataset, device, seed):
+def run_FuNN_HyVI(dataset, device):
     setup_ = get_setup(dataset)
-    setup = setup_.Setup(device, seed=seed)
+    setup = setup_.Setup(device)
     x_train, y_train = setup.train_data()
     x_test, y_test = setup.test_data()
 
@@ -162,16 +169,20 @@ def run_FuNN_HyVI(dataset, device, seed):
                                               input_sampler, n_epochs=n_epochs, sigma_noise_init=1.0,
                                               learn_noise=True, patience=patience)
 
-    theta = gen(1000).detach()
-    #y_pred = model(x_test, theta)
-    y_pred = model(x_test.cpu(), theta.cpu())
-    metrics = get_metrics(y_pred, sigma_noise, y_test, std_y_train, time)
-    x_data=torch.cat(x_train,x_test)
-    X = [x_train[:nb_samples_H], x_test[:nb_samples_H], OOD_sampler(x_data, nb_samples_H)]
-    Y = [model(x, theta) for x in X]
-    H = [batch_entropy_nne(y.transpose(0, 1), k=30) for y in Y]
-    return metrics, H
+    theta = gen(nb_predictions).detach()
+    x_test, y_test = setup.test_data()
+    x_ood, y_ood = setup.ood_data()
+    X = [x_train, x_test, x_ood]
+    Y = [torch.cat([model(x_, theta) for x_ in torch.split(x,1000)], dim=1)  for x in X]
+    metrics_test = get_metrics(Y[1], sigma_noise, y_test, std_y_train, time, gaussian_prediction=True)
+    metrics_ood = get_metrics(Y[2], sigma_noise, y_ood, std_y_train, time, gaussian_prediction=True)
 
+    Y_target=[y_train,y_test, y_ood]
+    Y_uncertain = [y.mean(0) + y.std(0) * torch.randn(nb_predictions, y.shape[1], 1).to(device) for y in Y]
+    H = [torch.cat([batch_entropy_nne(y_, k=30) for y_ in torch.split(y.transpose(0,1),1000,dim=0)]) for y in Y_uncertain]
+    SE=[(pred.mean(0)-target)**2 for pred,target in zip(Y,Y_target)]
+    RSE=[e.sqrt()*std_y_train for e in SE]
+    return (metrics_test,metrics_ood), (H,SE)
 
 def get_metrics(y_pred, sigma_noise, y_test, std_y_train, time, gaussian_prediction=False):
     metrics = {}
@@ -214,7 +225,7 @@ if __name__ == "__main__":
 
     if args.set == "small2":
         ## small ##
-        file_name = 'Results/Exp2/2mean_smallUCI_Exp2_' + date_string
+        file_name = 'Results/2mean/2mean_smallUCI_Exp2_' + date_string
         log_device=device
         n_epochs = 2000
         num_epochs_ensemble = 3000
@@ -225,14 +236,35 @@ if __name__ == "__main__":
         nblayers = 1
         activation = nn.ReLU()
         datasets = ['boston2', 'concrete2', 'energy2', 'wine2', 'yacht2']
-        SEEDS = [117 + i for i in range(10)]
+        Repeat = range(3)
+        nb_predictions=1000
+
+    
+    if args.set == "large2": 
+        # large ##
+        file_name = 'Results/2mean/UCI_large_Exp2_' + date_string
+        log_device='cpu'
+        n_epochs = 2000
+        num_epochs_ensemble = 500
+        batch_size = 500
+        patience=10
+        # predictive model architecture
+        layerwidth = 100
+        nblayers = 1
+        activation = nn.ReLU()
+        datasets =['kin8nm2', 'navalC2', 'powerplant2', 'protein2']
+        Repeat = range(3)
+        nb_predictions=500
+
  
+
     makedirs(file_name)
     with open(file_name, 'w') as f:
         script = open(__file__)
         f.write(script.read())
 
     RESULTS, STDS = {dataset: {} for dataset in datasets}, {dataset: {} for dataset in datasets}
+    RESULTS_ood, STDS_ood = {dataset: {} for dataset in datasets}, {dataset: {} for dataset in datasets}
     PRED_H = {dataset: {} for dataset in datasets}
 
     for dataset in datasets:
@@ -241,48 +273,79 @@ if __name__ == "__main__":
         pred_h = {}
         metrics = {}
         stds = {}
+        metrics_ood = {}
+        stds_ood = {}
 
-        results = [run_ensemble(dataset, device, seed) for seed in SEEDS]
-        mean, std = MeanStd([m for m, h in results], 'Ensemble')
-        pred_h.update({'Ensemble': [h for m, h in results]})
-        metrics.update(mean)
-        stds.update(std)
+        results = [run_MCdropout(dataset, device) for _ in Repeat]
+        mean, std = MeanStd([m[0] for m, h in results], 'McDropOut')
+        mean_ood, std_ood = MeanStd([m[1] for m, h in results], 'McDropOut')
 
-
-        results = [run_MCdropout(dataset, device, seed) for seed in SEEDS]
-        mean, std = MeanStd([m for m, h in results], 'McDropOut')
         pred_h.update({'McDropOut': [h for m, h in results]})
         metrics.update(mean)
         stds.update(std)
+        metrics_ood.update(mean_ood)
+        stds_ood.update(std_ood)
+        
+        results = [run_ensemble(dataset, device) for _ in Repeat]
+        mean, std = MeanStd([m[0] for m, h in results], 'Ensemble')
+        mean_ood, std_ood = MeanStd([m[1] for m, h in results], 'Ensemble')
 
-        results = [run_NN_HyVI(dataset, device, seed) for seed in SEEDS]
-        mean, std = MeanStd([m for m, h in results], 'NN-HyVI')
+        pred_h.update({'Ensemble': [h for m, h in results]})
+        metrics.update(mean)
+        stds.update(std)
+        metrics_ood.update(mean_ood)
+        stds_ood.update(std_ood)
+
+
+        results = [run_NN_HyVI(dataset, device) for _ in Repeat]
+        mean, std = MeanStd([m[0] for m, h in results], 'NN-HyVI')
+        mean_ood, std_ood = MeanStd([m[1] for m, h in results],'NN-HyVI')
+
         pred_h.update({'NN-HyVI': [h for m, h in results]})
         metrics.update(mean)
         stds.update(std)
+        metrics_ood.update(mean_ood)
+        stds_ood.update(std_ood)
 
-        results = [run_FuNN_HyVI(dataset, device, seed) for seed in SEEDS]
-        mean, std = MeanStd([m for m, h in results], 'FuNN-HyVI')
+
+        results = [run_FuNN_HyVI(dataset, device) for _ in Repeat]
+        mean, std = MeanStd([m[0] for m, h in results], 'FuNN-HyVI')
+        mean_ood, std_ood = MeanStd([m[1] for m, h in results],'FuNN-HyVI')
+
         pred_h.update({'FuNN-HyVI': [h for m, h in results]})
-
         metrics.update(mean)
         stds.update(std)
+        metrics_ood.update(mean_ood)
+        stds_ood.update(std_ood)
 
-        results = [run_MFVI(dataset, device, seed) for seed in SEEDS]
-        mean, std = MeanStd([m for m, h in results], 'MFVI')
+
+        results = [run_MFVI(dataset, device) for _ in Repeat]
+        mean, std = MeanStd([m[0] for m, h in results], 'MFVI')
+        mean_ood, std_ood = MeanStd([m[1] for m, h in results],'MFVI')
+
         pred_h.update({'MFVI': [h for m, h in results]})
         metrics.update(mean)
         stds.update(std)
+        metrics_ood.update(mean_ood)
+        stds_ood.update(std_ood)
 
-        results = [run_FuNN_MFVI(dataset, device, seed) for seed in SEEDS]
-        mean, std = MeanStd([m for m, h in results], 'FuNN-MFVI')
+        results = [run_FuNN_MFVI(dataset, device) for _ in Repeat]
+        mean, std = MeanStd([m[0] for m, h in results], 'FuNN-MFVI')
+        mean_ood, std_ood = MeanStd([m[1] for m, h in results],'FuNN-MFVI')
+
         pred_h.update({'FuNN-MFVI': [h for m, h in results]})
         metrics.update(mean)
         stds.update(std)
+        metrics_ood.update(mean_ood)
+        stds_ood.update(std_ood)
 
         RESULTS[dataset].update(metrics)
         STDS[dataset].update(stds)
+        RESULTS_ood[dataset].update(metrics_ood)
+        STDS_ood[dataset].update(stds_ood)
         PRED_H[dataset].update(pred_h)
 
         torch.save((RESULTS, STDS), file_name + '_metrics.pt')
+        torch.save((RESULTS_ood, STDS_ood), file_name + '_metrics_ood.pt')
+
         torch.save(PRED_H, file_name + '_entropy.pt')

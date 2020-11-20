@@ -16,9 +16,10 @@ def switch_setup(setup):
         'concrete': importlib.util.spec_from_file_location("concrete", "Data/concrete/__init__.py"),
         'energy':  importlib.util.spec_from_file_location("energy", "Data/energy/__init__.py") ,
         'wine': importlib.util.spec_from_file_location("wine", "Data/winequality/__init__.py"),
+        'yacht': importlib.util.spec_from_file_location("yacht", "Data/yacht/__init__.py"),
+
         'kin8nm': importlib.util.spec_from_file_location("kin8nm", "Data/kin8nm/__init__.py"),
         'powerplant': importlib.util.spec_from_file_location("powerplant", "Data/ccpowerplant/__init__.py"),
-        'yacht': importlib.util.spec_from_file_location("yacht", "Data/yacht/__init__.py"),
         'navalC': importlib.util.spec_from_file_location("navalC", "Data/naval/__init__.py"),
         'protein': importlib.util.spec_from_file_location("protein", "Data/protein/__init__.py"),
 
@@ -28,6 +29,10 @@ def switch_setup(setup):
         'wine2': importlib.util.spec_from_file_location("wine2", "Data/winequality2/__init__.py"),
         'yacht2': importlib.util.spec_from_file_location("yacht2", "Data/yacht2/__init__.py"),
 
+        'kin8nm2': importlib.util.spec_from_file_location("kin8nm2", "Data/kin8nm2/__init__.py"),
+        'powerplant2': importlib.util.spec_from_file_location("powerplant2", "Data/ccpowerplant2/__init__.py"),
+        'navalC2': importlib.util.spec_from_file_location("navalC2", "Data/naval2/__init__.py"),
+        'protein2': importlib.util.spec_from_file_location("protein2", "Data/protein2/__init__.py"),
 
 
     }[setup]

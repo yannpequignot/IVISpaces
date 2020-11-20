@@ -7,12 +7,11 @@ if __name__ == "__main__":
         os.system('python -m {}'.format(algorithm))                                                                                                         
     pool = Pool(processes=1) 
 
-    print('Exp2 large')
-    pool.map(run_script, ["UCI_Exp2 --set=large"])  
-    print('Exp1')
-    pool.map(run_script, ["UCI_Exp1"])  
-    print('Exp2 small')
-    pool.map(run_script, ["UCI_Exp2 --set=small"])  
+    print('2mean large')
+    pool.map(run_script, ["UCI_2Mean --set=large2"])  
+    print('2mean small')
+    pool.map(run_script, ["UCI_2Mean --set=small2"])  
+
 
     
     

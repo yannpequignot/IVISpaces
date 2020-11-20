@@ -7,8 +7,9 @@ from Data import AbstractRegressionSetup
 experiment_name='Yacht2'
 
 sigma_noise = 1.4 #yarin gal 1.4
-seed = 42
 
+
+seed=42
 
 class Setup(AbstractRegressionSetup): 
     def __init__(self, device, seed=seed):
@@ -18,11 +19,21 @@ class Setup(AbstractRegressionSetup):
         self.device = device
 
         self._preparare_data()
+        self._split_holdout_data()
         self._normalize_data()
         self._flip_data_to_torch()
-
+        
+    def ood_data(self):
+        return self._X_ood, self._y_ood
+    
     def _preparare_data(self):
-        self._X_train, y_train = torch.load ('Data/yacht2/train.pt')
-        self._y_train = np.expand_dims(y_train, axis=1)
-        self._X_test, y_test = torch.load ('Data/yacht2/test.pt')
-        self._y_test = np.expand_dims(y_test, axis=1)
+        self._X, _y = torch.load ('Data/yacht2/train.pt')
+        self._y = np.expand_dims(_y, axis=1)
+        self._X_ood, y_ood = torch.load ('Data/yacht2/test.pt')
+        self._y_ood = np.expand_dims(y_ood, axis=1)
+        self._X_ood = torch.as_tensor(self._X_ood).to(self.device).float()
+        self._y_ood = torch.as_tensor(self._y_ood).to(self.device).float()
+
+
+        
+        

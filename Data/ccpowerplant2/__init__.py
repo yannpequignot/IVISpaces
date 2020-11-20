@@ -4,9 +4,11 @@ import torch
 from Data import AbstractRegressionSetup
 
 
-experiment_name='Boston2'
+experiment_name='CCPowerPlant2'
 
-sigma_noise = 2.5
+input_dim = 4
+sigma_noise = 3.1
+
 seed=42
 
 class Setup(AbstractRegressionSetup): 
@@ -25,11 +27,9 @@ class Setup(AbstractRegressionSetup):
         return self._X_ood, self._y_ood
     
     def _preparare_data(self):
-        self._X, _y = torch.load ('Data/boston2/train.pt')
+        self._X, _y = torch.load ('Data/ccpowerplant2/train.pt')
         self._y = np.expand_dims(_y, axis=1)
-        self._X_ood, y_ood = torch.load ('Data/boston2/test.pt')
+        self._X_ood, y_ood =  torch.load ('Data/ccpowerplant2/test.pt')
         self._y_ood = np.expand_dims(y_ood, axis=1)
         self._X_ood = torch.as_tensor(self._X_ood).to(self.device).float()
         self._y_ood = torch.as_tensor(self._y_ood).to(self.device).float()
-        
-        
