@@ -4,8 +4,8 @@ import timeit
 from torch.utils.data import Dataset
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
-from Models import get_mlp, BigGenerator, MeanFieldVariationalDistribution
-from Metrics import kl_nne
+from Models import get_mlp, BigGenerator, MeanFieldVariationalDistribution, GaussianProcess
+from Metrics import kl_nne, entropy_nne
 from Tools import average_normal_loglikelihood, log_diagonal_mvn_pdf
 from Inference.VI_trainer import IVI
 
@@ -165,6 +165,73 @@ def FuNN_HyVI(x_train, y_train, batch_size, layerwidth, nblayers, activation, in
 
     return gen, model, sigma_noise, time
 
+def GP_FuNN_HyVI(x_train, y_train, batch_size, layerwidth, nblayers, activation, input_sampler, n_epochs=n_epochs,
+              sigma_noise_init=1.0,
+              learn_noise=True, patience=patience):
+    # setup data
+    device = x_train.device
+    train_dataset = torch.utils.data.TensorDataset(x_train, y_train)
+    size_data = len(train_dataset)
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+
+    # set predictive model
+    input_dim = x_train.shape[1]
+    param_count, model = get_mlp(input_dim, layerwidth, nblayers, activation)
+
+    # variational distribution: generative model hypernet
+    gen = BigGenerator(lat_dim, param_count, device).to(device)
+
+    prior=GaussianProcess(mean=torch.tensor(0.),lengthscale=1., noise=0.1)    
+
+    def kl(gen):
+        theta = gen(n_samples_KL)  # variationnel
+        X_ood=input_sampler()
+        f_theta=model(X_ood, theta).squeeze(2)
+        H=entropy_nne(f_theta,k_MC=X_ood.shape[0])
+        logtarget=prior.log_prob(X_ood,f_theta)
+        return -H-logtarget.mean()  
+
+    def ELBO(x_data, y_data, gen, _sigma_noise):
+        y_pred = model(x_data, gen(n_samples_LL))
+        sigma_noise = torch.log(torch.exp(_sigma_noise) + 1.)
+
+        Average_LogLikelihood = average_normal_loglikelihood(y_pred, y_data, sigma_noise)
+        the_KL = kl(gen)
+        the_ELBO = - Average_LogLikelihood + (len(x_data) / size_data) * the_KL
+        return the_ELBO, the_KL, Average_LogLikelihood, sigma_noise
+
+    ## Parametrize noise for learning aleatoric uncertainty
+
+    if learn_noise:
+        _sigma_noise = torch.log(torch.tensor(sigma_noise_init).exp() - 1.).clone().to(device).detach().requires_grad_(
+            learn_noise)
+        optimizer = torch.optim.Adam(list(gen.parameters()) + [_sigma_noise], lr=learning_rate)
+    else:
+        _sigma_noise = torch.log(torch.tensor(sigma_noise_init).exp() - 1.)
+        optimizer = torch.optim.Adam(gen.parameters(), lr=learning_rate)
+
+    scheduler = ReduceLROnPlateau(optimizer, patience=patience, factor=lr_decay, min_lr=min_lr)
+
+    Run = IVI(train_loader, ELBO, optimizer)
+
+    start = timeit.default_timer()
+    with trange(n_epochs) as tr:
+        tr.set_description(desc='gp-FuNN-HyVI', refresh=False)
+        for _ in tr:
+
+            scores = Run.one_epoch(gen, _sigma_noise)
+
+            scheduler.step(scores['ELBO'])
+            tr.set_postfix(ELBO=scores['ELBO'], LogLike=scores['LL'], KL=scores['KL'], lr=scores['lr'],
+                           sigma=scores['sigma'])
+
+            if scores['lr'] <= 1e-4:
+                break
+    stop = timeit.default_timer()
+    time = stop - start
+    sigma_noise = torch.log(torch.exp(_sigma_noise) + 1.).detach().cpu()
+
+    return gen, model, sigma_noise, time
 
 def MFVI(x_train, y_train, batch_size, layerwidth, nblayers, activation, n_epochs=n_epochs, sigma_noise_init=1.0,
          learn_noise=True, patience=2 * patience):

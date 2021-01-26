@@ -163,6 +163,32 @@ def run_FuNN_HyVI(dataset, device, seed):
     H = [batch_entropy_nne(y.transpose(0, 1), k=30) for y in Y]
     return metrics, H
 
+def run_gp_FuNN_HyVI(dataset, device):
+    setup_ = get_setup(dataset)
+    setup = setup_.Setup(device)
+    x_train, y_train = setup.train_data()
+
+
+    std_y_train = torch.tensor(setup.scaler_y.scale_, device=device).squeeze().float()
+
+    def input_sampler(n_ood=200):
+        M = x_train.max(0, keepdim=True)[0]
+        m = x_train.min(0, keepdim=True)[0]
+        X = torch.rand(n_ood, x_train.shape[1]).to(device) * (M - m) + m
+        return X
+    
+    gen, model, sigma_noise, time = GP_FuNN_HyVI(x_train, y_train, batch_size, layerwidth, nblayers, activation,
+                                                 input_sampler, n_epochs=n_epochs, sigma_noise_init=1.0,
+                                                 learn_noise=True, patience=patience)
+
+    x_test, y_test = setup.test_data()
+    theta = gen(1000).detach()
+    y_pred = model(x_test.cpu(), theta.cpu())
+    metrics = get_metrics(y_pred, sigma_noise, y_test, std_y_train, time)
+    X = [x_train[:nb_samples_H], x_test[:nb_samples_H], OOD_sampler(x_train, nb_samples_H)]
+    Y = [model(x, theta) for x in X]
+    H = [batch_entropy_nne(y.transpose(0, 1), k=30) for y in Y]
+    return metrics, H
 
 def get_metrics(y_pred, sigma_noise, y_test, std_y_train, time, gaussian_prediction=False):
     metrics = {}
@@ -240,13 +266,13 @@ if __name__ == "__main__":
 
     RESULTS, STDS = {dataset: {} for dataset in datasets}, {dataset: {} for dataset in datasets}
     PRED_H = {dataset: {} for dataset in datasets}
-
+    
     for dataset in datasets:
         print(dataset)
 
-        pred_h = {}
-        metrics = {}
-        stds = {}
+        pred_h = PRED_H[dataset]
+        metrics = RESULTS[dataset]
+        stds = STDS[dataset]
 
         results = [run_ensemble(dataset, device, seed) for seed in SEEDS]
         mean, std = MeanStd([m for m, h in results], 'Ensemble')
@@ -283,6 +309,13 @@ if __name__ == "__main__":
         results = [run_FuNN_MFVI(dataset, device, seed) for seed in SEEDS]
         mean, std = MeanStd([m for m, h in results], 'FuNN-MFVI')
         pred_h.update({'FuNN-MFVI': [h for m, h in results]})
+        metrics.update(mean)
+        stds.update(std)
+
+        results = [run_gp_FuNN_HyVI(dataset, device) for seed in SEEDS]
+        mean, std = MeanStd([m for m, h in results], 'FuNN-HyVI*')
+
+        pred_h.update({'FuNN-HyVI*': [h for m, h in results]})
         metrics.update(mean)
         stds.update(std)
 

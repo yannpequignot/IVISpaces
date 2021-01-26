@@ -98,10 +98,12 @@ def run_FuNN_MFVI(dataset, device):
     setup = setup_.Setup(device)
     x_train, y_train = setup.train_data()
     x_test, y_test = setup.test_data()
+    x_ood, y_ood = setup.ood_data()
+
     std_y_train = torch.tensor(setup.scaler_y.scale_, device=device).squeeze().float()
 
     def input_sampler(n_ood=200):
-        x_data=torch.cat([x_train,x_test])
+        x_data=torch.cat([x_train,x_test,x_ood])
         M = x_data.max(0, keepdim=True)[0]
         m = x_data.min(0, keepdim=True)[0]
         X = torch.rand(n_ood, x_train.shape[1]).to(device) * (M - m) + m
@@ -113,7 +115,6 @@ def run_FuNN_MFVI(dataset, device):
 
     theta = MF_dist(nb_predictions).detach()
     x_test, y_test = setup.test_data()
-    x_ood, y_ood = setup.ood_data()
     X = [x_train, x_test, x_ood]
     Y = [torch.cat([model(x_, theta) for x_ in torch.split(x,1000)], dim=1)  for x in X]
     metrics_test = get_metrics(Y[1], sigma_noise, y_test, std_y_train, time, gaussian_prediction=True)
@@ -155,11 +156,11 @@ def run_FuNN_HyVI(dataset, device):
     setup = setup_.Setup(device)
     x_train, y_train = setup.train_data()
     x_test, y_test = setup.test_data()
-
+    x_ood, y_ood = setup.ood_data()
     std_y_train = torch.tensor(setup.scaler_y.scale_, device=device).squeeze().float()
 
     def input_sampler(n_ood=200):
-        x_data=torch.cat([x_train,x_test])
+        x_data=torch.cat([x_train,x_test,x_ood])
         M = x_data.max(0, keepdim=True)[0]
         m = x_data.min(0, keepdim=True)[0]
         X = torch.rand(n_ood, x_train.shape[1]).to(device) * (M - m) + m
@@ -171,7 +172,41 @@ def run_FuNN_HyVI(dataset, device):
 
     theta = gen(nb_predictions).detach()
     x_test, y_test = setup.test_data()
+    X = [x_train, x_test, x_ood]
+    Y = [torch.cat([model(x_, theta) for x_ in torch.split(x,1000)], dim=1)  for x in X]
+    metrics_test = get_metrics(Y[1], sigma_noise, y_test, std_y_train, time, gaussian_prediction=True)
+    metrics_ood = get_metrics(Y[2], sigma_noise, y_ood, std_y_train, time, gaussian_prediction=True)
+
+    Y_target=[y_train,y_test, y_ood]
+    Y_uncertain = [y.mean(0) + y.std(0) * torch.randn(nb_predictions, y.shape[1], 1).to(device) for y in Y]
+    H = [torch.cat([batch_entropy_nne(y_, k=30) for y_ in torch.split(y.transpose(0,1),1000,dim=0)]) for y in Y_uncertain]
+    SE=[(pred.mean(0)-target)**2 for pred,target in zip(Y,Y_target)]
+    RSE=[e.sqrt()*std_y_train for e in SE]
+    return (metrics_test,metrics_ood), (H,SE)
+
+def run_gp_FuNN_HyVI(dataset, device):
+    setup_ = get_setup(dataset)
+    setup = setup_.Setup(device)
+    x_train, y_train = setup.train_data()
+    x_test, y_test = setup.test_data()
     x_ood, y_ood = setup.ood_data()
+
+
+    std_y_train = torch.tensor(setup.scaler_y.scale_, device=device).squeeze().float()
+
+    def input_sampler(n_ood=200):
+        x_data=torch.cat([x_train,x_test,x_ood])
+        M = x_data.max(0, keepdim=True)[0]
+        m = x_data.min(0, keepdim=True)[0]
+        X = torch.rand(n_ood, x_train.shape[1]).to(device) * (M - m) + m
+        return X
+
+    gen, model, sigma_noise, time = GP_FuNN_HyVI(x_train, y_train, batch_size, layerwidth, nblayers, activation,
+                                                 input_sampler, n_epochs=n_epochs, sigma_noise_init=1.0,
+                                                 learn_noise=True, patience=patience)
+
+    theta = gen(nb_predictions).detach()
+    x_test, y_test = setup.test_data()
     X = [x_train, x_test, x_ood]
     Y = [torch.cat([model(x_, theta) for x_ in torch.split(x,1000)], dim=1)  for x in X]
     metrics_test = get_metrics(Y[1], sigma_noise, y_test, std_y_train, time, gaussian_prediction=True)
@@ -214,8 +249,8 @@ def MeanStd(metric_list, method):
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser()
-    parser.add_argument("--set", type=str, default="small2",
-                        help="small2")
+    parser.add_argument("--set", type=str, default="small",
+                        help="small or large")
     args = parser.parse_args()
 
 
@@ -223,7 +258,7 @@ if __name__ == "__main__":
 
     date_string = datetime.now().strftime("%Y-%m-%d-%H:%M")
 
-    if args.set == "small2":
+    if args.set == "small":
         ## small ##
         file_name = 'Results/2mean/2mean_smallUCI_Exp2_' + date_string
         log_device=device
@@ -240,7 +275,7 @@ if __name__ == "__main__":
         nb_predictions=1000
 
     
-    if args.set == "large2": 
+    if args.set == "large": 
         # large ##
         file_name = 'Results/2mean/UCI_large_Exp2_' + date_string
         log_device='cpu'
@@ -266,6 +301,11 @@ if __name__ == "__main__":
     RESULTS, STDS = {dataset: {} for dataset in datasets}, {dataset: {} for dataset in datasets}
     RESULTS_ood, STDS_ood = {dataset: {} for dataset in datasets}, {dataset: {} for dataset in datasets}
     PRED_H = {dataset: {} for dataset in datasets}
+
+    
+#     RESULTS, STDS = torch.load('Results/2mean/2mean_smallUCI_Exp2_2020-11-19-15:56_metrics.pt')
+#     RESULTS_ood, STDS_ood = torch.load('Results/2mean/2mean_smallUCI_Exp2_2020-11-19-15:56_metrics_ood.pt')
+#     PRED_H = torch.load('Results/2mean/2mean_smallUCI_Exp2_2020-11-19-15:56_entropy.pt')
 
     for dataset in datasets:
         print(dataset)
@@ -318,7 +358,16 @@ if __name__ == "__main__":
         metrics_ood.update(mean_ood)
         stds_ood.update(std_ood)
 
+        results = [run_gp_FuNN_HyVI(dataset, device) for _ in Repeat]
+        mean, std = MeanStd([m[0] for m, h in results], 'FuNN-HyVI*')
+        mean_ood, std_ood = MeanStd([m[1] for m, h in results],'FuNN-HyVI*')
 
+        pred_h.update({'FuNN-HyVI*': [h for m, h in results]})
+        metrics.update(mean)
+        stds.update(std)
+        metrics_ood.update(mean_ood)
+        stds_ood.update(std_ood)
+        
         results = [run_MFVI(dataset, device) for _ in Repeat]
         mean, std = MeanStd([m[0] for m, h in results], 'MFVI')
         mean_ood, std_ood = MeanStd([m[1] for m, h in results],'MFVI')
