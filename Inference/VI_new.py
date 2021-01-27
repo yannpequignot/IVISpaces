@@ -4,10 +4,9 @@ import timeit
 from torch.utils.data import Dataset
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
-from Models import get_mlp, BigGenerator, MeanFieldVariationalDistribution, GaussianProcess, HyVI
+from Models import get_mlp, BigGenerator, MeanFieldVariationalDistribution, GaussianProcess, VI
 from Metrics import kl_nne, entropy_nne
 from Tools import average_normal_loglikelihood, log_diagonal_mvn_pdf
-from Inference.VI_trainer import IVI
 
 # generative model
 lat_dim = 5
@@ -29,17 +28,56 @@ kNNE = 1  # k-nearest neighbour
 
 sigma_prior = .5  # Default scale for Gaussian prior on weights of predictive network
 
+model = HyVI(input_dim, layerwidth, nblayers, activation, sigma_noise_init, learn_noise, device)
 
-def NN_HyVI(train_dataset, layerwidth, nblayers, activation, n_epochs=n_epochs, sigma_noise_init=1.0,
+
+class VI_trainer():
+    def __init__(self, train_loader, ELBO, optimizer):
+        self.train_loader = train_loader
+        self.ELBO = ELBO
+        self.optimizer = optimizer
+
+    def one_epoch(self, model, _sigma):
+        self.scores = {'ELBO': 0.,
+                       'KL': 0.,
+                       'LL': 0.,
+                       'sigma': 0.
+                       }
+        example_count = 0.
+
+        model.train(True)
+        with torch.enable_grad():
+            for (x, y) in self.train_loader:
+                self.optimizer.zero_grad()
+
+                L, K, LL, sigma = self.ELBO(x, y, model, _sigma)
+                L.backward()
+
+                lr = self.optimizer.param_groups[0]['lr']
+
+                self.optimizer.step()
+
+                self.scores['ELBO'] += L.item() * len(x)
+                self.scores['KL'] += K.item() * len(x)
+                self.scores['LL'] += LL.item() * len(x)
+                self.scores['sigma'] += sigma.item() * len(x)
+
+                example_count += len(x)
+
+        mean_scores = {'ELBO': self.scores['ELBO'] / example_count,
+                       'KL': self.scores['KL'] / example_count,
+                       'LL': self.scores['LL'] / example_count,
+                       'sigma': self.scores['sigma'] / example_count,
+                       'lr': lr
+                       }
+        return mean_scores
+
+def NN_train(model, train_dataset, batch_size,, n_epochs=n_epochs, sigma_noise_init=1.0,
             learn_noise=True,  patience=patience):
     device =train_loader.device
     #train_dataset = torch.utils.data.TensorDataset(x_train, y_train)
     size_data = len(train_dataset)
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-
-    # set model
-    input_dim = x_train.shape[1]
-    model=HyVI(input_dim, layerwidth, nblayers, activation, sigma_noise_init, learn_noise, device)
 
     def prior(n):
         return sigma_prior * torch.randn(size=(n, model.param_count), device=device)
@@ -54,22 +92,14 @@ def NN_HyVI(train_dataset, layerwidth, nblayers, activation, n_epochs=n_epochs, 
         y_pred = model(x_data, n_samples_LL)
         Average_LogLikelihood = average_normal_loglikelihood(y_pred, y_data, model.sigma_noise)
         the_KL = kl(model)
-        the_ELBO = - Average_LogLikelihood + (len(x_data) / size_data) * the_KL  # (len(x_data)/size_data)*the_KL
+        the_ELBO = - Average_LogLikelihood + (len(x_data) / size_data) * the_KL
         return the_ELBO, the_KL, Average_LogLikelihood
 
-    ## Parametrize noise for learning aleatoric uncertainty
-
-    if learn_noise:
-        _sigma_noise = torch.log(torch.tensor(sigma_noise_init).exp() - 1.).clone().to(device).detach().requires_grad_(
-            learn_noise)
-        optimizer = torch.optim.Adam(list(model.parameters()) + [_sigma_noise], lr=learning_rate)
-    else:
-        _sigma_noise = torch.log(torch.tensor(sigma_noise_init).exp() - 1.)
-        optimizer = torch.optim.Adam(gen.parameters(), lr=learning_rate)
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
     scheduler = ReduceLROnPlateau(optimizer, patience=patience, factor=lr_decay, min_lr=min_lr)
 
-    Run = IVI(train_loader, ELBO, optimizer)
+    Run = VI_trainer(train_loader, ELBO, optimizer)
 
     start = timeit.default_timer()
     with trange(n_epochs) as tr:
@@ -88,7 +118,7 @@ def NN_HyVI(train_dataset, layerwidth, nblayers, activation, n_epochs=n_epochs, 
     time = stop - start
     sigma_noise = torch.log(torch.exp(_sigma_noise) + 1.).detach().cpu()
 
-    return gen, model, sigma_noise, time
+    return model, time
 
 
 def FuNN_HyVI(x_train, y_train, batch_size, layerwidth, nblayers, activation, input_sampler, n_epochs=n_epochs,
@@ -242,7 +272,7 @@ def MFVI(x_train, y_train, batch_size, layerwidth, nblayers, activation, n_epoch
     param_count, model = get_mlp(input_dim, layerwidth, nblayers, activation)
 
     # variational distribution
-    MFVI = MeanFieldVariationalDistribution(param_count, std_init=1., sigma=0.001, device=device)
+    MFVI = MeanFieldVariationalDistribution(param_count, std_init=1., sigma=0.001)
 
     def ELBO(x_data, y_data, MFVI_dist, _sigma_noise):
         y_pred = model(x_data, MFVI_dist(n_samples_LL))
@@ -301,7 +331,7 @@ def FuNN_MFVI(x_train, y_train, batch_size, layerwidth, nblayers, activation, in
     param_count, model = get_mlp(input_dim, layerwidth, nblayers, activation)
 
     # variational distribution
-    MFVI = MeanFieldVariationalDistribution(param_count, std_init=0., sigma=0.001, device=device)
+    MFVI = MeanFieldVariationalDistribution(param_count, std_init=0., sigma=0.001)
 
     def prior(n):
         return sigma_prior * torch.randn(size=(n, param_count), device=device)
