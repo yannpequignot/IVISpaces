@@ -23,6 +23,7 @@ class VI(nn.Module, ABC):
     def sigma_noise(self):
         return torch.log(torch.exp(self._sigma_noise) + 1.)
 
+
     def forward(self, x, nb_predictors):
         theta = self.gen(nb_predictors)
         y_pred = self.predictor(x, theta)
@@ -37,6 +38,10 @@ class HyVI(VI):
     def _gen_init(self):
         self.gen = BigGenerator(self.lat_dim, self.param_count)
 
+    @property
+    def name(self):
+        return 'HyVI'
+
 
 class MFVI(VI):
     def __init__(self, input_dim, layerwidth, nblayers, activation, init_sigma_noise, learn_noise, lat_dim):
@@ -45,3 +50,6 @@ class MFVI(VI):
 
     def _gen_init(self):
         self.gen = MeanFieldVariationalDistribution(self.param_count, std_init=1., sigma=0.001)
+    @property
+    def name(self):
+        return 'MFVI'

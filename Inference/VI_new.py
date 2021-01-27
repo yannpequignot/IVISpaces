@@ -28,16 +28,13 @@ kNNE = 1  # k-nearest neighbour
 
 sigma_prior = .5  # Default scale for Gaussian prior on weights of predictive network
 
-model = HyVI(input_dim, layerwidth, nblayers, activation, sigma_noise_init, learn_noise, device)
-
-
 class VI_trainer():
     def __init__(self, train_loader, ELBO, optimizer):
         self.train_loader = train_loader
         self.ELBO = ELBO
         self.optimizer = optimizer
 
-    def one_epoch(self, model, _sigma):
+    def one_epoch(self, model):
         self.scores = {'ELBO': 0.,
                        'KL': 0.,
                        'LL': 0.,
@@ -50,7 +47,7 @@ class VI_trainer():
             for (x, y) in self.train_loader:
                 self.optimizer.zero_grad()
 
-                L, K, LL, sigma = self.ELBO(x, y, model, _sigma)
+                L, K, LL = self.ELBO(x, y, model)
                 L.backward()
 
                 lr = self.optimizer.param_groups[0]['lr']
@@ -60,7 +57,7 @@ class VI_trainer():
                 self.scores['ELBO'] += L.item() * len(x)
                 self.scores['KL'] += K.item() * len(x)
                 self.scores['LL'] += LL.item() * len(x)
-                self.scores['sigma'] += sigma.item() * len(x)
+                self.scores['sigma'] += model.sigma_noise.item() * len(x)
 
                 example_count += len(x)
 
@@ -72,10 +69,10 @@ class VI_trainer():
                        }
         return mean_scores
 
-def NN_train(model, train_dataset, batch_size,, n_epochs=n_epochs, sigma_noise_init=1.0,
-            learn_noise=True,  patience=patience):
-    device =train_loader.device
-    #train_dataset = torch.utils.data.TensorDataset(x_train, y_train)
+
+def NN_train(model, train_dataset, batch_size, n_epochs=n_epochs, patience=patience):
+    device = next(model.parameters()).device
+    # train_dataset = torch.utils.data.TensorDataset(x_train, y_train)
     size_data = len(train_dataset)
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
@@ -106,7 +103,7 @@ def NN_train(model, train_dataset, batch_size,, n_epochs=n_epochs, sigma_noise_i
         tr.set_description(desc='NN-HyVI', refresh=False)
         for _ in tr:
 
-            scores = Run.one_epoch(gen, _sigma_noise)
+            scores = Run.one_epoch(model)
 
             scheduler.step(scores['ELBO'])
             tr.set_postfix(ELBO=scores['ELBO'], LogLike=scores['LL'], KL=scores['KL'], lr=scores['lr'],
@@ -116,7 +113,6 @@ def NN_train(model, train_dataset, batch_size,, n_epochs=n_epochs, sigma_noise_i
                 break
     stop = timeit.default_timer()
     time = stop - start
-    sigma_noise = torch.log(torch.exp(_sigma_noise) + 1.).detach().cpu()
 
     return model, time
 
