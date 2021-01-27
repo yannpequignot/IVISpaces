@@ -105,7 +105,7 @@ def FuNN_HyVI(x_train, y_train, batch_size, layerwidth, nblayers, activation, in
     param_count, model = get_mlp(input_dim, layerwidth, nblayers, activation)
 
     # variational distribution: generative model hypernet
-    gen = BigGenerator(lat_dim, param_count, device).to(device)
+    gen = BigGenerator(lat_dim, param_count).to(device)
 
     def prior(n):
         return sigma_prior * torch.randn(size=(n, param_count), device=device)
@@ -175,7 +175,7 @@ def GP_FuNN_HyVI(x_train, y_train, batch_size, layerwidth, nblayers, activation,
     param_count, model = get_mlp(input_dim, layerwidth, nblayers, activation)
 
     # variational distribution: generative model hypernet
-    gen = BigGenerator(lat_dim, param_count, device).to(device)
+    gen = BigGenerator(lat_dim, param_count).to(device)
 
     prior=GaussianProcess(mean=torch.tensor(0.),lengthscale=1., noise=0.1)    
 

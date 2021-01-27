@@ -3,10 +3,9 @@ from torch import nn
 
 
 class BigGenerator(nn.Module):
-    def __init__(self, lat_dim, output_dim, device):
+    def __init__(self, lat_dim, output_dim):
         super(BigGenerator, self).__init__()
         self.lat_dim = lat_dim
-        self.device = device
         self.output_dim = output_dim
 
         def block(in_feat, out_feat):
@@ -22,5 +21,5 @@ class BigGenerator(nn.Module):
         )
 
     def forward(self, n=1):
-        epsilon = torch.randn(size=(n, self.lat_dim), device=self.device)
+        epsilon = torch.randn(size=(n, self.lat_dim), device=next(self.parameters()).device)
         return self.model(epsilon)
