@@ -1,6 +1,8 @@
 import torch
 from torch import nn
-from Models import get_mlp, BigGenerator, MeanFieldVariationalDistribution
+from .predictiveMLP import get_mlp
+from .GenerativeNetwork import BigGenerator
+from .MeanField import MeanFieldVariationalDistribution
 from abc import ABC, abstractmethod
 
 
