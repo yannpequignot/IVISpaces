@@ -5,7 +5,6 @@ from torch import nn
 class BigGenerator(nn.Module):
     def __init__(self, lat_dim, output_dim, device):
         super(BigGenerator, self).__init__()
-
         self.lat_dim = lat_dim
         self.device = device
         self.output_dim = output_dim
