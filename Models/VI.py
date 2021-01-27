@@ -44,12 +44,13 @@ class HyVI(VI):
 
 
 class MFVI(VI):
-    def __init__(self, input_dim, layerwidth, nblayers, activation, init_sigma_noise, learn_noise, lat_dim):
-        self.lat_dim = lat_dim
+    def __init__(self,input_dim, layerwidth, nblayers, activation, init_sigma_noise, learn_noise, std_mu_init, sigma_init):
+        self.std_mu_init=std_mu_init
+        self.sigma_init=sigma_init
         super().__init__(input_dim, layerwidth, nblayers, activation, init_sigma_noise, learn_noise)
 
     def _gen_init(self):
-        self.gen = MeanFieldVariationalDistribution(self.param_count, std_init=1., sigma=0.001)
+        self.gen = MeanFieldVariationalDistribution(self.param_count, std_mu_init=self.std_mu_init, sigma_init=self.sigma_init)
     @property
     def name(self):
         return 'MFVI'

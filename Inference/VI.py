@@ -246,7 +246,7 @@ def MFVI(x_train, y_train, batch_size, layerwidth, nblayers, activation, n_epoch
     param_count, model = get_mlp(input_dim, layerwidth, nblayers, activation)
 
     # variational distribution
-    MFVI = MeanFieldVariationalDistribution(param_count, std_init=1., sigma=0.001, device=device)
+    MFVI = MeanFieldVariationalDistribution(param_count, std_mu_init=1., sigma_init=0.001)
 
     def ELBO(x_data, y_data, MFVI_dist, _sigma_noise):
         y_pred = model(x_data, MFVI_dist(n_samples_LL))
@@ -305,7 +305,7 @@ def FuNN_MFVI(x_train, y_train, batch_size, layerwidth, nblayers, activation, in
     param_count, model = get_mlp(input_dim, layerwidth, nblayers, activation)
 
     # variational distribution
-    MFVI = MeanFieldVariationalDistribution(param_count, std_init=0., sigma=0.001, device=device)
+    MFVI = MeanFieldVariationalDistribution(param_count, std_mu_init=0., sigma_init=0.001)
 
     def prior(n):
         return sigma_prior * torch.randn(size=(n, param_count), device=device)
