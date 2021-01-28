@@ -38,6 +38,7 @@ class MC_Dropout(nn.Module):
         x = self.layer2(x)
         return x
 
+    
     def predict(self, x, num_samples):
         samples = []
         for i in range(num_samples):
@@ -46,7 +47,7 @@ class MC_Dropout(nn.Module):
         samples = torch.stack(samples)  # N x T x 1
         return samples
 
-def MCdo_train(model, train_dataset, num_epochs, learn_rate, weight_decay):
+def MCdo_train(model, train_dataset, batch_size, num_epochs, learn_rate, weight_decay):
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     optimizer = torch.optim.Adam(model.parameters(), lr=learn_rate, weight_decay=weight_decay)
     loss_func = log_gaussian_loss
