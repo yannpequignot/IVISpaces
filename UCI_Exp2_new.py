@@ -83,7 +83,7 @@ if __name__ == "__main__":
 
     if args.set == "small":
         ## small ##
-        file_name = 'Results/Exp2/Exp2_small' + date_string
+        file_name = 'Results/Paper/Exp2/Exp2_small' + date_string
         log_device=device
         nb_input_samples = 200
         n_epochs = 2000
@@ -99,7 +99,7 @@ if __name__ == "__main__":
 
     if args.set == "large":
         # large ##
-        file_name = 'Results/Exp2/Exp2_large' + date_string
+        file_name = 'Results/Paper/Exp2/Exp2_large' + date_string
         log_device='cpu'
         nb_input_samples = 200
         n_epochs = 2000
@@ -131,11 +131,16 @@ if __name__ == "__main__":
 
             std_y_train = torch.tensor(setup.scaler_y.scale_, device=device).squeeze().float()
 
-            split={}
+            split = {}
 
             model = ensemble(input_dim, layerwidth, activation, num_models=5).to(device)
             logs, time = ensemble_train(model.model_list, train_dataset, batch_size, num_epochs=num_epochs_ensemble)
-            split.update({"MFVI": [model.state_dict(), logs, time]})
+            split.update({"Ensemble": [model.state_dict(), logs, time]})
+
+            trainer = MC_Dropout(x_train, y_train, batch_size, layerwidth, init_sigma_noise=1., drop_prob=0.05, learn_noise=True, activation=activation)
+            logs, time = trainer.fit(num_epochs=n_epochs, learn_rate=1e-3, weight_decay=1e-1 / (10 * len(x_train) // 9) ** 0.5)
+            split.update({"MC dropout": [model.state_dict(), logs, time]})
+
 
             model = MFVI(input_dim, layerwidth, nblayers, activation, init_sigma_noise=1., learn_noise=True,
                          std_mu_init=1., sigma_init=0.001).to(device)
@@ -163,7 +168,8 @@ if __name__ == "__main__":
             split.update({"FuNN-MFVI": [model.state_dict(), logs, time]})
 
             x_test, y_test = setup.test_data()
-            split.update({"train": (x_train, y_train),
-                          "test": (x_test, y_test)})
-            MODELS[dataset].append(split)
+            data = {"train": (x_train, y_train),
+                    "test": (x_test, y_test),
+                    "scaler_y": torch.tensor(setup.scaler_y.scale_, device=device).squeeze().float()}
+            MODELS[dataset].append((data, split))
             torch.save(MODELS, file_name + '_models.pt')
