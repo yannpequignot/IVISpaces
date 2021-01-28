@@ -7,10 +7,11 @@ class uniform_rect_sampler(nn.Module):
         super().__init__()
         self.n=n
         self.dim=data.shape[1]
+        self.device=data.device
         self.a=data.max(0, keepdim=True)[0]-data.min(0, keepdim=True)[0]
         self.b=data.min(0, keepdim=True)[0]
     def forward(self):
-        return torch.rand(self.n, self.dim).to(device) * (self.a) + self.b
+        return torch.rand(self.n, self.dim).to(self.device) * (self.a) + self.b
 
 
 def log_norm(x, mu, std):

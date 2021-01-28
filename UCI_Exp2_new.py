@@ -1,9 +1,6 @@
 import os
 from datetime import datetime
 
-import torch
-from torch import nn
-
 from Data import get_setup
 from Inference_new import *
 from Models.VI import *
@@ -140,29 +137,33 @@ if __name__ == "__main__":
             logs, time = ensemble_train(model.model_list, train_dataset, batch_size, num_epochs=num_epochs_ensemble)
             split.update({"MFVI": [model.state_dict(), logs, time]})
 
-            model = MFVI(input_dim, layerwidth, nblayers, activation, init_sigma_noise=1., learn_noise=True, std_mu_init=1., sigma_init=0.001).to(device)
-            logs, time = BBB_train(model, train_dataset, batch_size,  n_epochs=n_epochs)
+            model = MFVI(input_dim, layerwidth, nblayers, activation, init_sigma_noise=1., learn_noise=True,
+                         std_mu_init=1., sigma_init=0.001).to(device)
+            logs, time = BBB_train(model, train_dataset, batch_size, n_epochs=n_epochs, patience=2 * patience)
             split.update({"MFVI": [model.state_dict(), logs, time]})
 
+            model = HyVI(input_dim, layerwidth, nblayers, activation, init_sigma_noise=1., learn_noise=True,
+                         lat_dim=5).to(device)
+            logs, time = NN_train(model, train_dataset, batch_size, n_epochs=n_epochs, patience=patience)
+            split.update({"NN-HyVI": [model.state_dict(), logs, time]})
 
-            model = HyVI(input_dim, layerwidth, nblayers, activation, init_sigma_noise=1., learn_noise=True, lat_dim=5).to(device)
-            logs, time = NN_train(model, train_dataset, batch_size, n_epochs=n_epochs)
-            split.update({"NN-HyVI":[model.state_dict(), logs, time]})
-
-            #define input sampler for predictor distance estimation
+            # define input sampler for predictor distance estimation
             input_sampler = uniform_rect_sampler(x_train, n=nb_input_samples)
 
-            model = HyVI(input_dim, layerwidth, nblayers, activation, init_sigma_noise=1., learn_noise=True, lat_dim=5).to(device)
-            logs, time = FuNN_train(model, train_dataset, batch_size, input_sampler, n_epochs=n_epochs)
+            model = HyVI(input_dim, layerwidth, nblayers, activation, init_sigma_noise=1., learn_noise=True,
+                         lat_dim=5).to(device)
+            logs, time = FuNN_train(model, train_dataset, batch_size, input_sampler, n_epochs=n_epochs,
+                                    patience=patience)
             split.update({"FuNN-HyVI": [model.state_dict(), logs, time]})
 
-            model = MFVI(input_dim, layerwidth, nblayers, activation, init_sigma_noise=1., learn_noise=True, std_mu_init=1., sigma_init=0.001).to(device)
-            logs, time = FuNN_train(model, train_dataset, batch_size, input_sampler, n_epochs=n_epochs)
+            model = MFVI(input_dim, layerwidth, nblayers, activation, init_sigma_noise=1., learn_noise=True,
+                         std_mu_init=1., sigma_init=0.001).to(device)
+            logs, time = FuNN_train(model, train_dataset, batch_size, input_sampler, n_epochs=n_epochs,
+                                    patience=patience)
             split.update({"FuNN-MFVI": [model.state_dict(), logs, time]})
 
             x_test, y_test = setup.test_data()
-            split.update({"train":(x_train,y_train),
-                          "test":(x_test,y_test)})
+            split.update({"train": (x_train, y_train),
+                          "test": (x_test, y_test)})
             MODELS[dataset].append(split)
             torch.save(MODELS, file_name + '_models.pt')
-
