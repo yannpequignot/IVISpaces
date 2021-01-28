@@ -2,6 +2,8 @@ import torch
 import timeit
 from tqdm import trange
 
+
+
 def ensemble(x_train, y_train, batch_size, layerwidth, activation, num_epochs=3000, num_models=5):
     device=x_train.device
     input_dim = x_train.shape[1]

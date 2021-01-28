@@ -1,5 +1,16 @@
 import torch
 import math
+from torch import nn
+
+class uniform_rect_sampler(nn.Module):
+    def __init__(self, data, n):
+        super().__init__()
+        self.n=n
+        self.dim=data.shape[1]
+        self.a=data.max(0, keepdim=True)[0]-data.min(0, keepdim=True)[0]
+        self.b=data.min(0, keepdim=True)[0]
+    def forward(self):
+        return torch.rand(self.n, self.dim).to(device) * (self.a) + self.b
 
 
 def log_norm(x, mu, std):

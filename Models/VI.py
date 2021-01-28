@@ -31,7 +31,7 @@ class VI(nn.Module, ABC):
 
 
 class HyVI(VI):
-    def __init__(self, input_dim, layerwidth, nblayers, activation, init_sigma_noise, learn_noise, lat_dim):
+    def __init__(self, input_dim, layerwidth, nblayers, activation, init_sigma_noise=1., learn_noise=True, lat_dim=5):
         self.lat_dim = lat_dim
         super().__init__(input_dim, layerwidth, nblayers, activation, init_sigma_noise, learn_noise)
 
@@ -44,7 +44,7 @@ class HyVI(VI):
 
 
 class MFVI(VI):
-    def __init__(self,input_dim, layerwidth, nblayers, activation, init_sigma_noise, learn_noise, std_mu_init, sigma_init):
+    def __init__(self,input_dim, layerwidth, nblayers, activation, init_sigma_noise=1., learn_noise=True, std_mu_init=1., sigma_init=0.001):
         self.std_mu_init=std_mu_init
         self.sigma_init=sigma_init
         super().__init__(input_dim, layerwidth, nblayers, activation, init_sigma_noise, learn_noise)
