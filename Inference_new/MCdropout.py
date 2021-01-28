@@ -13,7 +13,7 @@ def log_gaussian_loss(output, target, sigma, no_dim):
     return -(log_coeff + exponent).sum()
 
 
-class MC_Dropout_Model(nn.Module):
+class MC_Dropout(nn.Module):
     def __init__(self, input_dim, output_dim, no_units, init_sigma_noise, drop_prob, learn_noise, activation):
         super(MC_Dropout_Model, self).__init__()
         self.drop_prob=drop_prob
