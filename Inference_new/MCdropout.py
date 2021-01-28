@@ -1,9 +1,9 @@
-from Models import MC_Dropout_Model
 import timeit
 import torch
 from torch import nn
 from torch.utils.data import Dataset
 from tqdm import trange
+import torch.nn.functional as F
 
 
 
@@ -12,10 +12,9 @@ def log_gaussian_loss(output, target, sigma, no_dim):
     log_coeff = -no_dim*torch.log(sigma)
     return -(log_coeff + exponent).sum()
 
-
 class MC_Dropout(nn.Module):
     def __init__(self, input_dim, output_dim, no_units, init_sigma_noise, drop_prob, learn_noise, activation):
-        super(MC_Dropout_Model, self).__init__()
+        super().__init__()
         self.drop_prob=drop_prob
         self.input_dim = input_dim
         self.output_dim = output_dim
@@ -49,7 +48,7 @@ class MC_Dropout(nn.Module):
 
 def MCdo_train(model, train_dataset, num_epochs, learn_rate, weight_decay):
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    optimizer = torch.optim.Adam(self.network.parameters(), lr=learn_rate, weight_decay=weight_decay)
+    optimizer = torch.optim.Adam(model.parameters(), lr=learn_rate, weight_decay=weight_decay)
     loss_func = log_gaussian_loss
     logs = {'loss': [], "lr": [], "sigma": []}
     start = timeit.default_timer()
@@ -62,7 +61,7 @@ def MCdo_train(model, train_dataset, num_epochs, learn_rate, weight_decay):
                 optimizer.zero_grad()
 
                 output = model(x)
-                loss = loss_func(output, y, torch.log(torch.exp(self.network.sigma_noise) + 1.), 1)
+                loss = loss_func(output, y, torch.log(torch.exp(model.sigma_noise) + 1.), 1)
 
                 loss.backward()
 

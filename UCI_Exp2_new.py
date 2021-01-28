@@ -110,7 +110,7 @@ if __name__ == "__main__":
         layerwidth = 100
         nblayers = 1
         activation = nn.ReLU()
-        datasets = ['kin8nm', 'navalC', 'powerplant', 'protein']
+        datasets = ['navalC', 'powerplant', 'protein']
         SEEDS = [117 + i for i in range(5)]
 
     makedirs(file_name)
@@ -137,8 +137,10 @@ if __name__ == "__main__":
             logs, time = ensemble_train(model.model_list, train_dataset, batch_size, num_epochs=num_epochs_ensemble)
             split.update({"Ensemble": [model.state_dict(), logs, time]})
 
-            trainer = MC_Dropout(x_train, y_train, batch_size, layerwidth, init_sigma_noise=1., drop_prob=0.05, learn_noise=True, activation=activation)
-            logs, time = trainer.fit(num_epochs=n_epochs, learn_rate=1e-3, weight_decay=1e-1 / (10 * len(x_train) // 9) ** 0.5)
+            model = MC_Dropout(input_dim, 1, layerwidth, init_sigma_noise=1., drop_prob=0.05, learn_noise=True,
+                               activation=activation).to(device)
+            logs, time = MCdo_train(model, train_dataset, num_epochs=n_epochs, learn_rate=1e-3,
+                                    weight_decay=1e-1 / (10 * len(x_train) // 9) ** 0.5)
             split.update({"MC dropout": [model.state_dict(), logs, time]})
 
 
