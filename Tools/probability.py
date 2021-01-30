@@ -13,7 +13,15 @@ class uniform_rect_sampler(nn.Module):
     def forward(self):
         return torch.rand(self.n, self.dim).to(self.device) * (self.a) + self.b
 
-
+def univariate_gaussian_entropy(sigma=None, var=None):
+    if sigma is not None:
+        return 0.5*torch.log(2*math.pi*math.e*sigma**2)
+    if var is not None:
+        return 0.5*torch.log(2*math.pi*math.e*var)
+    
+def mv_gaussian_entropy(covariance):
+    return 0.5*torch.det(2*math.pi*math.e*covariance).log()
+    
 def log_norm(x, mu, std):
     """
     Evaluation of 1D normal distribution on tensors
