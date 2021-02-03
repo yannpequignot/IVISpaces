@@ -67,7 +67,8 @@ yacht    &  3.84±0.022 &  1.06±0.043 &  0.86±0.035 &   3.89±0.028 &  2.25±0
 \end{tabular}
 -->
 ## LPP
-![](EXP1_RMSE.png)
+
+![](EXP1_RMSE.png)
 
 <!--
 \begin{tabular}{llllllll}
@@ -92,25 +93,26 @@ yacht    &  -4.1±0.00045 &   -4.0±0.0001 &  -0.5±0.08407 &  -4.1±0.00062 &  
 
 
 ### histogram
-![](Exp1_EpistVarDist_Exp2-1.pdf)
+![](Exp1_EpistVarDist_Exp2-1.pdf?raw=true)
 
 scaled on variance range $[0,3]$.
 
-![](Exp1_EpistVarDist_Exp2-scaled_0to3.pdf)
+![](Exp1_EpistVarDist_Exp2-scaled_0to3.pdf?raw=true)
 ### empirical cumulative distribution
 ![](Exp1_EpistVarECDF_Exp2-1.pdf)
 
 
 ## ROC curves and AUC
 
-![](Exp1_ROC_curves_VAR_MinMax.pdf)
+![](Exp1_ROC_curves_VAR_MinMax.pdf?raw=true)
 
 ## Concrete detail
 
 on $[0,4]$
-![](Exp1_EpistVarECDF_Exp2-concrete.pdf)
+![](Exp1_EpistVarECDF_Exp2-concrete.pdf?raw=true)
 on $[0,15]$
-![](Exp1_EpistVarECDF_Exp2-concrete_to15.pdf)![](Exp1_ROC_curves_concrete.pdf)
+![](Exp1_EpistVarECDF_Exp2-concrete_to15.pdf?raw=true)
+![](Exp1_ROC_curves_concrete.pdf?raw=true)
 
 
 
@@ -139,7 +141,8 @@ yacht    &  502.0±0.0 &    nan±nan &  152.0±4.0 &   263.0±0.0 &    -589.0±8
 -->
 
 ### Predictor space
-![](Exp1_Predictor_Entropy.png)
+
+![](Exp1_Predictor_Entropy.png)
 
 <!--
 \begin{tabular}{llllllll}
@@ -177,7 +180,8 @@ yacht    &  0.737±0.07 &   0.68±0.07 &  1.153±0.07 &  1.708±0.17 &  0.599±0
 \end{tabular}
 -->
 ## LPP
-![](Exp2_small_LPP.png)
+
+![](Exp2_small_LPP.png)
 
 <!--
 \begin{tabular}{lllllll}
@@ -196,31 +200,32 @@ yacht    &  -0.59±0.034 &   -0.8±0.394 &  -1.65±0.124 &  -4.66±0.529 &  -0.9
 
 ## logs
 
-![](Exp2Small_logs.png)
+![](Exp2Small_logs.png?raw=true)
 
 ## Epistemic predictive variance distributions
 
 
 ### histogram
-![](Exp2_small_EpistVarDist_Exp2-1.pdf)
+![](Exp2_small_EpistVarDist_Exp2-1.pdf?raw=true)
 
 scaled on variance range $[0,3]$.
 
-![](Exp2_small_EpistVarDist_Exp2-scaled_1to3.pdf)
+![](Exp2_small_EpistVarDist_Exp2-scaled_1to3.pdf?raw=true)
 
 
 
 ### empirical cumulative distribution
-![](Exp2_small_EpistVarECDF_Exp2-1.pdf)
+![](Exp2_small_EpistVarECDF_Exp2-1.pdf?raw=true)
 
 
 ## ROC curves and AUC
 
-![](Exp2_small_ROC_curves_VAR.pdf)
+![](Exp2_small_ROC_curves_VAR.pdf?raw=true)
 
 ## Concrete detail
 
-![](Exp2_small_EpistVarECDF_Exp2-concrete.pdf)![](Exp2_small_ROC_curves_concrete.pdf)
+![](Exp2_small_EpistVarECDF_Exp2-concrete.pdf?raw=true)
+![](Exp2_small_ROC_curves_concrete.pdf?raw=true)
 
 
 ## Entropy of ensemble
@@ -248,7 +253,8 @@ yacht    &    nan±nan &   169.0±9.0 &   236.0±8.0 &   -772.0±104.0 &   335.0
 -->
 
 ### Predictor space
-![](Exp2small_Param_Entropy.png)
+
+![](Exp2small_Param_Entropy.png)
 
 <!--
 \begin{tabular}{lllllll}
@@ -307,18 +313,18 @@ protein    &  -20.019±0.587 &  -12.096±0.806 &  -2.864±0.006 &  -2.888±0.005
 
 
 ### histogram
-![](Large_EpistVarDist_Exp2.pdf)
+![](Large_EpistVarDist_Exp2.pdf?raw=true)
 
 ### empirical cumulative distribution
-![](Exp2_large_EpistVarECDF.pdf)
+![](Exp2_large_EpistVarECDF.pdf?raw=true)
 
 ## ROC curves and AUC
-![](Exp2_large_ROC_curves.pdf)
+![](Exp2_large_ROC_curves.pdf?raw=true)
 
 ## Powerplant detail
 
-![](Exp2_large_EpistVarECDF_Exp2-powerplant.pdf)
-![](Exp2_large_ROC_curves_powerplant.pdf)
+![](Exp2_large_EpistVarECDF_Exp2-powerplant.pdf?raw=true)
+![](Exp2_large_ROC_curves_powerplant.pdf?raw=true)
 
 
 ## Entropy of ensemble
@@ -342,7 +348,8 @@ protein    &    nan±nan &  1204.0±11.0 &  -350.0±146.0 &  -4038.0±336.0 &  1
 -->
 
 ### Predictor space
-![](Predictor_Entropy_large.png)
+
+![](Predictor_Entropy_large.png)
 
 <!--
 \begin{tabular}{lllllll}
