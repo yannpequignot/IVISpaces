@@ -17,9 +17,8 @@ lr_decay = .7
 min_lr = 0.0001
 
 # loss hyperparameters
-n_samples_LL = 100  # nb of predictor samples for average LogLikelihood
+n_samples_VAR=50  # nb of predictor samples for MC estimation at each step
 
-n_samples_KL = 500  # nb of predictor samples for KL divergence
 kNNE = 1  # k-nearest neighbour
 
 sigma_prior = .5  # Default scale for Gaussian prior on weights of predictive network
@@ -66,10 +65,7 @@ class VI_trainer():
                        }
         return mean_scores
 
-
-def NN_train(model, train_dataset, batch_size, n_epochs, patience, desc=None):
-    if desc is None:
-        desc=model.name
+def NN_train(model, train_dataset, batch_size, n_epochs, patience, n_samples_VAR=n_samples_VAR):
     device = next(model.parameters()).device
     size_data = len(train_dataset)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
@@ -77,16 +73,16 @@ def NN_train(model, train_dataset, batch_size, n_epochs, patience, desc=None):
     def prior(n):
         return sigma_prior * torch.randn(size=(n, model.param_count), device=device)
 
-    def kl(model):
-        theta = model.gen(n_samples_KL)  # variational
-        theta_prior = prior(n_samples_KL)  # prior
+    def kl(theta):
+        theta_prior = prior(n_samples_VAR)  # prior
         K = kl_nne(theta, theta_prior, k=kNNE)
         return K
 
     def ELBO(x_data, y_data, model):
-        y_pred = model(x_data, n_samples_LL)
+        theta=model.gen(n_samples_VAR)
+        y_pred = model.predictor(x_data, theta)
         Average_LogLikelihood = average_normal_loglikelihood(y_pred, y_data, model.sigma_noise)
-        the_KL = kl(model)
+        the_KL = kl(theta)
         the_ELBO = - Average_LogLikelihood + (len(x_data) / size_data) * the_KL
         return the_ELBO, the_KL, Average_LogLikelihood
 
@@ -99,7 +95,7 @@ def NN_train(model, train_dataset, batch_size, n_epochs, patience, desc=None):
     logs = {'ELBO': [], 'LL': [], "KL": [], "lr": [], "sigma": []}
     start = timeit.default_timer()
     with trange(n_epochs) as tr:
-        tr.set_description(desc='NN-' + desc, refresh=False)
+        tr.set_description(desc='NN-' + model.name, refresh=False)
         for _ in tr:
 
             scores = Run.one_epoch(model)
@@ -113,14 +109,12 @@ def NN_train(model, train_dataset, batch_size, n_epochs, patience, desc=None):
             if scores['lr'] <= 1e-4:
                 break
     stop = timeit.default_timer()
-    time = stop - start
+    run_time = stop - start
 
-    return logs, time
+    return logs, run_time
 
 
-def FuNN_train(model, train_dataset, batch_size, input_sampler, n_epochs, patience, desc=None):
-    if desc is None:
-        desc=model.name
+def FuNN_train(model, train_dataset, batch_size, input_sampler, n_epochs, patience, n_samples_VAR=n_samples_VAR):
     device = next(model.parameters()).device
     size_data = len(train_dataset)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
@@ -128,9 +122,9 @@ def FuNN_train(model, train_dataset, batch_size, input_sampler, n_epochs, patien
     def prior(n):
         return sigma_prior * torch.randn(size=(n, model.param_count), device=device)
 
-    def kl(model):
-        theta = model.gen(n_samples_KL)  # variationnel
-        theta_prior = prior(n_samples_KL)  # prior
+    def kl(theta):
+        #theta = model.gen(n_samples_KL)  # variationnel
+        theta_prior = prior(n_samples_VAR)  # prior
         X = input_sampler()  # sample OOD inputs
         theta_proj = model.predictor(X, theta).squeeze(2)  # evaluate predictors at OOD inputs
         theta_prior_proj = model.predictor(X, theta_prior).squeeze(2)  # evaluate predictors at OOD inputs
@@ -138,9 +132,10 @@ def FuNN_train(model, train_dataset, batch_size, input_sampler, n_epochs, patien
         return K
 
     def ELBO(x_data, y_data, model):
-        y_pred = model(x_data, n_samples_LL)
+        theta=model.gen(n_samples_VAR)
+        y_pred = model.predictor(x_data, theta)
         Average_LogLikelihood = average_normal_loglikelihood(y_pred, y_data, model.sigma_noise)
-        the_KL = kl(model)
+        the_KL = kl(theta)
         the_ELBO = - Average_LogLikelihood + (len(x_data) / size_data) * the_KL
         return the_ELBO, the_KL, Average_LogLikelihood
 
@@ -153,7 +148,7 @@ def FuNN_train(model, train_dataset, batch_size, input_sampler, n_epochs, patien
     logs = {'ELBO': [], 'LL': [], "KL": [], "lr": [], "sigma": []}
     start = timeit.default_timer()
     with trange(n_epochs) as tr:
-        tr.set_description(desc='FuNN-' + desc, refresh=False)
+        tr.set_description(desc='FuNN-' + model.name, refresh=False)
         for _ in tr:
 
             scores = Run.one_epoch(model)
@@ -167,21 +162,19 @@ def FuNN_train(model, train_dataset, batch_size, input_sampler, n_epochs, patien
             if scores['lr'] <= 1e-4:
                 break
     stop = timeit.default_timer()
-    time = stop - start
+    run_time = stop - start
 
-    return logs, time
+    return logs, run_time
 
 
-def BBB_train(model, train_dataset, batch_size, n_epochs, patience, desc=None):
-    if desc is None:
-        desc=model.name
+def BBB_train(model, train_dataset, batch_size, n_epochs, patience, n_samples_VAR=n_samples_VAR):
     size_data = len(train_dataset)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
     def ELBO(x_data, y_data, model):
-        y_pred = model(x_data, n_samples_LL)
+        theta = model.gen(n_samples_VAR)
+        y_pred = model.predictor(x_data, theta)
         Average_LogLikelihood = average_normal_loglikelihood(y_pred, y_data, model.sigma_noise)
-        theta = model.gen(n_samples_KL)
         the_KL = model.gen.log_prob(theta).mean() - log_diagonal_mvn_pdf(theta, std=sigma_prior).mean()
         the_ELBO = - Average_LogLikelihood + (len(x_data) / size_data) * the_KL
         return the_ELBO, the_KL, Average_LogLikelihood
@@ -195,7 +188,7 @@ def BBB_train(model, train_dataset, batch_size, n_epochs, patience, desc=None):
     logs = {'ELBO': [], 'LL': [], "KL": [], "lr": [], "sigma": []}
     start = timeit.default_timer()
     with trange(n_epochs) as tr:
-        tr.set_description(desc=desc, refresh=False)
+        tr.set_description(desc='MFVI', refresh=False)
         for _ in tr:
 
             scores = Run.one_epoch(model)
@@ -209,8 +202,56 @@ def BBB_train(model, train_dataset, batch_size, n_epochs, patience, desc=None):
             if scores['lr'] <= 1e-4:
                 break
     stop = timeit.default_timer()
-    time = stop - start
+    run_time = stop - start
 
-    return logs, time
+    return logs, run_time
 
 
+# def GP_FuNN_train(model, train_dataset, batch_size, input_sampler, n_epochs, patience, n_samples_LL=n_samples_LL, n_samples_KL = n_samples_KL):
+#     device = next(model.parameters()).device
+#     size_data = len(train_dataset)
+#     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+
+#     prior = GaussianProcess(mean=torch.tensor(0.), lengthscale=1., noise=0.1).to(device)
+
+#     def kl(model):
+#         theta = model.gen(n_samples_KL)  # variational
+#         X_ood = input_sampler()
+#         f_theta = model.predictor(X_ood, theta).squeeze(2)
+#         H = entropy_nne(f_theta, k_MC=X_ood.shape[0])
+#         logtarget = prior.log_prob(X_ood, f_theta)
+#         return -H - logtarget.mean()
+
+#     def ELBO(x_data, y_data, model):
+#         y_pred = model(x_data, n_samples_LL)
+#         Average_LogLikelihood = average_normal_loglikelihood(y_pred, y_data, model.sigma_noise)
+#         the_KL = kl(model)
+#         the_ELBO = - Average_LogLikelihood + (len(x_data) / size_data) * the_KL
+#         return the_ELBO, the_KL, Average_LogLikelihood
+
+#     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+
+#     scheduler = ReduceLROnPlateau(optimizer, patience=patience, factor=lr_decay, min_lr=min_lr)
+
+#     Run = VI_trainer(train_loader, ELBO, optimizer)
+
+#     logs = {'ELBO': [], 'LL': [], "KL": [], "lr": [], "sigma": []}
+#     start = timeit.default_timer()
+#     with trange(n_epochs) as tr:
+#         tr.set_description(desc='GP-FuNN-' + model.name, refresh=False)
+#         for _ in tr:
+
+#             scores = Run.one_epoch(model)
+
+#             scheduler.step(scores['ELBO'])
+#             tr.set_postfix(ELBO=scores['ELBO'], LogLike=scores['LL'], KL=scores['KL'], lr=scores['lr'],
+#                            sigma=scores['sigma'])
+#             for key, values in logs.items():
+#                 values.append(scores[key])
+
+#             if scores['lr'] <= 1e-4:
+#                 break
+#     stop = timeit.default_timer()
+#     run_time = stop - start
+
+#     return logs, run_time
