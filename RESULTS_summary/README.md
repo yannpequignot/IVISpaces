@@ -93,11 +93,12 @@ yacht    &  -4.1±0.00045 &   -4.0±0.0001 &  -0.5±0.08407 &  -4.1±0.00062 &  
 
 
 ### histogram
+
 ![](Exp1_EpistVarDist_Exp2-1.pdf)
 
 scaled on variance range $[0,3]$.
 
-![](Exp1_EpistVarDist_Exp2-scaled_0to3.pdf?raw=true)
+![](Exp1_EpistVarDist_Exp2-scaled_0to3.pdf)
 ### empirical cumulative distribution
 ![](Exp1_EpistVarECDF_Exp2-1.pdf)
 
