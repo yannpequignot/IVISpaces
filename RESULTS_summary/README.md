@@ -93,7 +93,7 @@ yacht    &  -4.1±0.00045 &   -4.0±0.0001 &  -0.5±0.08407 &  -4.1±0.00062 &  
 
 
 ### histogram
-![](Exp1_EpistVarDist_Exp2-1.pdf?raw=true)
+![](Exp1_EpistVarDist_Exp2-1.pdf)
 
 scaled on variance range $[0,3]$.
 
