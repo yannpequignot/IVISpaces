@@ -47,14 +47,14 @@ class MC_Dropout(nn.Module):
         samples = torch.stack(samples)  # N x T x 1
         return samples
 
-def MCdo_train(model, train_dataset, batch_size, num_epochs, learn_rate, weight_decay):
+def MCdo_train(model, train_dataset, batch_size, num_epochs, learn_rate, weight_decay, desc='MCdropout'):
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     optimizer = torch.optim.Adam(model.parameters(), lr=learn_rate, weight_decay=weight_decay)
     loss_func = log_gaussian_loss
     logs = {'loss': [], "lr": [], "sigma": []}
     start = timeit.default_timer()
     with trange(num_epochs) as tr:
-        tr.set_description(desc='MCdropout', refresh=False)
+        tr.set_description(desc=desc, refresh=False)
         for _ in tr:
             epoch_loss = 0.
             train_samples = 0

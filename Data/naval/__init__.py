@@ -11,7 +11,7 @@ experiment_name='navalCompressor'
 
 input_dim = 16
 
-sigma_noise = .005
+sigma_noise = .2 #YG 0.005
 seed = 42
 sigma_prior=0.5
 
