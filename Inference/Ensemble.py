@@ -1,31 +1,45 @@
-import torch
 import timeit
+
+import torch
+from torch import nn
+from torch.utils.data import DataLoader
 from tqdm import trange
 
 
-
-def ensemble(x_train, y_train, batch_size, layerwidth, activation, num_epochs=3000, num_models=5):
-    device=x_train.device
-    input_dim = x_train.shape[1]
-
-    train_dataset = torch.utils.data.TensorDataset(x_train, y_train)
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-
-    start = timeit.default_timer()
-    model_list = []
-    for m_i in range(num_models):
-
-        model = torch.nn.Sequential(
+class ensemble(nn.Module):
+    def __init__(self, input_dim, layerwidth, activation, num_models):
+        super().__init__()
+        self.model_list = nn.ModuleList([torch.nn.Sequential(
             torch.nn.Linear(input_dim, layerwidth),
             activation,
-            torch.nn.Linear(layerwidth, 1))
-        model.to(device)
+            torch.nn.Linear(layerwidth, 1)) for _ in range(num_models)])
 
+    def forward(self, x):
+        predictions = []
+        for model in self.model_list:
+            predictions.append(model(x).detach())
+        return torch.stack(predictions, dim=0)
+
+    @property
+    def get_parameters(self):
+        thetas = []
+        for model in self.model_list:
+            thetas.append(torch.cat([t.flatten() for t in model.parameters()]))
+        return torch.stack(thetas)
+
+
+def ensemble_train(model_list, train_dataset, batch_size, num_epochs=3000):
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+
+    start = timeit.default_timer()
+    i = 0
+    logs = {}
+    for model in model_list:
         loss = torch.nn.MSELoss()
         optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
-
+        log = []
         with trange(num_epochs) as tr:
-            tr.set_description(desc='EnsembleB-{}'.format(m_i), refresh=False)
+            tr.set_description(desc='EnsembleB-{}'.format(i), refresh=False)
             for t in tr:
                 cost = 0.
                 count_batch = 0
@@ -39,14 +53,10 @@ def ensemble(x_train, y_train, batch_size, layerwidth, activation, num_epochs=30
                     cost += output.item() * len(x)
                     count_batch += 1
                 tr.set_postfix(loss=cost / count_batch)
-        model_list.append(model)
+                log.append(cost / count_batch)
+        logs.update({i:log})
+        i += 1
 
     stop = timeit.default_timer()
     time = stop - start
-    return model_list, time
-
-def ensemble_predict(x,models):
-    predictions = []
-    for m_i in range(len(models)):
-        predictions.append(models[m_i](x).detach())
-    return torch.stack(predictions, dim=0)
+    return logs, time
