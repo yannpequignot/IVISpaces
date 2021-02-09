@@ -2,7 +2,7 @@
 
 python	        3.8.5
 
-torch           1.6.0
+torch           1.7.1
 
 pandas          1.1.3	
 
